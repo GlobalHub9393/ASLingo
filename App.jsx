@@ -4,7 +4,7 @@ import {
   GraduationCap, Heart, Home, LibraryBig, LoaderCircle, LogOut, Play,
   RotateCcw, Search, Settings2, Shuffle, Sparkles, Star, X
 } from 'lucide-react';
-import { neon } from './lib/neon.js';
+import { neon } from './neon.js';
 
 const CATEGORY_META = {
   conversation: ['Conversation', 'Everyday exchange and common responses'],
@@ -42,7 +42,7 @@ function makeQuestion(target, allLetters) {
 
 function App() {
   const session = neon.auth.useSession();
-  if (session.isPending) return <FullScreenLoading label="Opening ASL Learn…" />;
+  if (session.isPending) return <FullScreenLoading label="Opening ASLingo…" />;
   if (!session.data?.user) return <AuthScreen />;
   return <SignedInApp session={session.data} />;
 }
@@ -466,7 +466,7 @@ function HomeTab({ user, profile, mastered, lessons, completedLessons, nextLesso
   return (
     <div className="screen">
       <header className="screen-header">
-        <div><p className="eyebrow">ASL Learn</p><h1>Hey, {firstName}.</h1></div>
+        <div><p className="eyebrow">ASLingo</p><h1>Hey, {firstName}.</h1></div>
         <div className="level-pill">{profile.placement_level}</div>
       </header>
 
@@ -639,7 +639,7 @@ function ProfileTab({ user, profile, mastered, lessonProgress, dictionaryState }
 
   return (
     <div className="screen">
-      <header className="profile-header"><div className="avatar">{(user.name || user.email || 'A').slice(0, 1).toUpperCase()}</div><h1>{user.name || 'ASL Learner'}</h1><p>{user.email}</p><span>{profile.placement_level}</span></header>
+      <header className="profile-header"><div className="avatar">{(user.name || user.email || 'A').slice(0, 1).toUpperCase()}</div><h1>{user.name || 'ASLingoer'}</h1><p>{user.email}</p><span>{profile.placement_level}</span></header>
       <div className="profile-stats"><div><strong>{mastered}</strong><span>mastered letters</span></div><div><strong>{lessonProgress.filter(row => row.completed).length}</strong><span>lessons</span></div><div><strong>{favorites}</strong><span>favorites</span></div><div><strong>{viewed}</strong><span>signs viewed</span></div></div>
       <section className="profile-section"><div className="profile-section-title"><Settings2 size={20} /><h2>About this build</h2></div><p>Version 0.1 starts with alphabet learning, smart practice, Neon-synced progress, favorites, and a live categorized sign reference.</p></section>
       <section className="profile-section"><div className="profile-section-title"><BookOpen size={20} /><h2>Sources & attribution</h2></div><p>Alphabet artwork is based on public-domain ASL fingerspelling materials hosted by Wikimedia Commons.</p><p>Sign reference content: Hochgesang, J. A., Crasborn, O., & Lillo-Martin, D. (2026 (2017–2026)). <em>ASL Signbank</em>.</p><a href="https://aslsignbank.com" target="_blank" rel="noreferrer">Open ASL Signbank</a></section>
@@ -832,7 +832,7 @@ function FullScreenLoading({ label }) {
 }
 
 function RetryScreen({ message, onRetry }) {
-  return <main className="center-screen"><div className="error-card"><strong>Couldn’t open ASL Learn</strong><span>{message}</span><button onClick={onRetry}>Try again</button></div></main>;
+  return <main className="center-screen"><div className="error-card"><strong>Couldn’t open ASLingo</strong><span>{message}</span><button onClick={onRetry}>Try again</button></div></main>;
 }
 
 export default App;

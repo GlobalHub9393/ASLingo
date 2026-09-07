@@ -1,11 +1,11 @@
 {
-  "name": "asl-learning",
+  "name": "aslingo",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node build-flat.mjs",
     "preview": "vite preview",
     "cf:preview": "npm run build && wrangler pages dev dist"
   },

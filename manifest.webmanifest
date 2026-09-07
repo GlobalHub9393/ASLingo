@@ -1,6 +1,6 @@
 {
-  "name": "ASL Learn",
-  "short_name": "ASL Learn",
+  "name": "ASLingo",
+  "short_name": "ASLingo",
   "description": "Personal ASL learning, alphabet practice, and visual sign reference.",
   "start_url": "/",
   "display": "standalone",

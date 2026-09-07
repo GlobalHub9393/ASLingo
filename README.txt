@@ -1,32 +1,26 @@
-ASLingo Local Camera Practice Beta
+ASLingo Local Camera Auto-Check v2
 
-This is a SEPARATE proof-of-concept. It does not change the main course, Gemini camera beta,
-dictionary, media audit, progress, friends, or Neon.
-
-REPLACE:
-- package.json
-- vite.config.js
-
-ADD:
+Replace:
 - local-camera.html
-- local-camera.js
 - local-camera.css
+- local-camera.js
 
-After Cloudflare deploys, open:
-https://aslingo.pages.dev/local-camera.html
+No package/vite changes needed if the first MediaPipe beta is already deployed.
 
-What it does:
-- Uses MediaPipe Hand Landmarker 1.0.1 in the browser.
-- Tracks 21 landmarks for one hand.
-- Camera frames are not uploaded to ASLingo or Gemini.
-- Runs a constrained A-Z target checker locally.
-- J and Z include short motion-path checks.
-- Shows live hand skeleton, target confidence, handshape score, motion score, and tracking confidence.
-- Optional "Teach this letter" stores a personalized landmark template in LOCAL browser storage.
-- Personal templates are especially useful for subtle A/S/M/N/T handshapes.
-- Zero Gemini calls and zero Cloudflare AI requests.
+What changed:
+- Camera can be on without checking.
+- New START CHECKING button.
+- Default pass rule: >=80% continuously for 0.8 seconds.
+- Both confidence threshold and hold time are adjustable on screen.
+- When the condition is met, ASLingo automatically accepts the letter and moves to the next one.
+- Confidence must stay above threshold continuously; dropping below resets the hold timer.
+- J and Z now score the SHAPE of the fingertip trajectory, not just "did the hand move?"
+- J requires a stem + hook/turn pattern.
+- Z requires two horizontal-ish outer strokes with a diagonal return stroke.
+- Calibration is renamed "Calibrate my hand" and appears ONLY for A/E/M/N/S/T.
+- One calibration per subtle letter; repeated calibration cannot stack.
+- Calibration contributes only 16% of shape confidence, so it cannot make a bad generic handshape pass by itself.
+- Partial manual sessions no longer report a misleading all-alphabet average.
 
-Important:
-This is intentionally a proof-of-concept, not a claim of general ASL recognition.
-The target-specific rules need tuning from real tests on an iPhone/iPad. That is exactly
-what this page is for.
+Next step after this works:
+- Build actual fingerspelling recognition where ASLingo predicts letters in sequence instead of showing the target first.

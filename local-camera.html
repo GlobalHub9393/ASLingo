@@ -33,9 +33,10 @@
       </div>
       <button class="primary" id="startCameraButton">Turn on camera</button>
       <p class="fineprint">
-        Beta note: this is a constrained handshape checker, not a certified ASL
-        interpreter. J and Z also use motion. A/S/M/N/T are especially subtle from
-        landmarks alone, so you can optionally teach ASLingo your own handshape.
+        Beta note: this is a constrained target checker, not a general ASL
+        interpreter. Start Checking will automatically advance only after a letter
+        stays above your confidence threshold for the selected hold time. J and Z
+        require the expected motion pattern, not just movement.
       </p>
     </section>
 
@@ -45,6 +46,36 @@
         <canvas id="overlay"></canvas>
         <div class="camera-badge" id="cameraBadge">Loading hand model…</div>
         <div class="fps-badge" id="fpsBadge">0 fps</div>
+      </div>
+
+      <div class="checker-controls">
+        <div class="checker-settings">
+          <label>
+            <span>Pass at</span>
+            <select id="thresholdSelect">
+              <option value="75">75%</option>
+              <option value="80" selected>80%</option>
+              <option value="85">85%</option>
+            </select>
+          </label>
+          <label>
+            <span>Hold for</span>
+            <select id="holdSelect">
+              <option value="500">0.5 sec</option>
+              <option value="800" selected>0.8 sec</option>
+              <option value="1000">1.0 sec</option>
+              <option value="1200">1.2 sec</option>
+            </select>
+          </label>
+        </div>
+        <button class="primary checker-start" id="checkButton">Start checking</button>
+      </div>
+
+      <div class="hold-track" aria-hidden="true">
+        <span id="holdProgress"></span>
+      </div>
+      <div class="checker-status" id="checkerStatus">
+        Camera is ready. Tap <b>Start checking</b> when you want ASLingo to begin A–Z.
       </div>
 
       <div class="prompt-panel">
@@ -79,13 +110,14 @@
 
       <div class="actions">
         <button class="secondary" id="prevButton">← Previous</button>
-        <button class="secondary" id="teachButton">Teach this letter</button>
+        <button class="secondary hidden" id="teachButton">Calibrate my hand</button>
         <button class="primary" id="nextButton">Next →</button>
       </div>
 
       <div class="teach-note hidden" id="teachNote">
-        Hold <b id="teachLetter">A</b> naturally for about one second. ASLingo will
-        save a private handshape template only in this browser.
+        Hold <b id="teachLetter">A</b> naturally for about one second. This only
+        fine-tunes hand proportions for a few subtle letters; it cannot turn a wrong
+        handshape into a passing score.
       </div>
 
       <div class="alphabet-grid" id="alphabetGrid"></div>

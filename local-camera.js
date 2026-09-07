@@ -3,6 +3,9 @@ import { HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
 const TEMPLATE_KEY = 'aslingo.localAlphabetTemplates.v1';
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const CALIBRATABLE_LETTERS = new Set(['A','E','M','N','S','T']);
+const DEFAULT_PASS_THRESHOLD = 80;
+const DEFAULT_HOLD_MS = 800;
 
 const video = document.getElementById('camera');
 const canvas = document.getElementById('overlay');
@@ -29,6 +32,11 @@ const teachNote = document.getElementById('teachNote');
 const teachLetter = document.getElementById('teachLetter');
 const alphabetGrid = document.getElementById('alphabetGrid');
 const restartButton = document.getElementById('restartButton');
+const checkButton = document.getElementById('checkButton');
+const thresholdSelect = document.getElementById('thresholdSelect');
+const holdSelect = document.getElementById('holdSelect');
+const holdProgressEl = document.getElementById('holdProgress');
+const checkerStatus = document.getElementById('checkerStatus');
 
 let handLandmarker = null;
 let cameraStream = null;
@@ -42,6 +50,10 @@ let motionFrames = [];
 let teaching = null;
 let results = {};
 let templates = loadTemplates();
+let checkingActive = false;
+let holdStartedAt = null;
+let holdPeak = 0;
+let cooldownUntil = 0;
 
 const clamp = (v,min=0,max=1)=>Math.max(min,Math.min(max,v));
 const dist = (a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
@@ -159,25 +171,60 @@ function fingerPattern(f, pattern){
 
 function motionStats(letter){
   const now=performance.now();
-  const frames=motionFrames.filter(f=>now-f.t<1700);
-  if(frames.length<5) return {score:0,path:0,turns:0};
+  const frames=motionFrames.filter(f=>now-f.t<1800);
+  if(frames.length<8) return {score:0,path:0,structure:0};
+
   const idx=letter==='J'?20:8;
-  const pts=frames.map(f=>f.lm[idx]);
-  let path=0, turns=0, prevDx=0;
-  for(let i=1;i<pts.length;i++){
-    const dx=pts[i].x-pts[i-1].x;
-    const dy=pts[i].y-pts[i-1].y;
-    path+=Math.hypot(dx,dy);
-    if(Math.abs(dx)>.003 && Math.abs(prevDx)>.003 && Math.sign(dx)!==Math.sign(prevDx)) turns++;
-    if(Math.abs(dx)>.003) prevDx=dx;
-  }
-  const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
-  const spanX=Math.max(...xs)-Math.min(...xs);
-  const spanY=Math.max(...ys)-Math.min(...ys);
+  const raw=frames.map(f=>f.lm[idx]);
+
+  // Smooth the fingertip trace to ignore camera jitter.
+  const pts=raw.map((p,i)=>{
+    const lo=Math.max(0,i-2), hi=Math.min(raw.length,i+3);
+    const slice=raw.slice(lo,hi);
+    return {
+      x:avg(slice.map(v=>v.x)),
+      y:avg(slice.map(v=>v.y)),
+    };
+  });
+
+  let path=0;
+  for(let i=1;i<pts.length;i++) path+=dist2(pts[i],pts[i-1]);
+
+  const pointAt = ratio => pts[Math.min(pts.length-1,Math.max(0,Math.round((pts.length-1)*ratio)))];
+  const vec=(a,b)=>({x:b.x-a.x,y:b.y-a.y});
+  const mag=v=>Math.hypot(v.x,v.y);
+  const cosine=(a,b)=>{
+    const den=mag(a)*mag(b);
+    return den?clamp((a.x*b.x+a.y*b.y)/den,-1,1):1;
+  };
+
   if(letter==='J'){
-    return {score:clamp((path-.05)/.20)*.55+clamp((spanY-.025)/.12)*.25+clamp((spanX-.015)/.10)*.20,path,turns};
+    // A real J should look like a stem followed by a hook/turn. Merely waving
+    // the hand now scores poorly.
+    const p0=pointAt(.08), p1=pointAt(.58), p2=pointAt(.92);
+    const stem=vec(p0,p1), hook=vec(p1,p2);
+    const stemVertical=clamp((Math.abs(stem.y)-Math.abs(stem.x)*.75)/.12 + .5);
+    const hookLateral=clamp((Math.abs(hook.x)-.025)/.13);
+    const turn=clamp((.82-cosine(stem,hook))/.95);
+    const enoughPath=clamp((path-.08)/.28);
+    const structure=clamp(stemVertical*.34+hookLateral*.27+turn*.29+enoughPath*.10);
+    return {score:structure,path,structure};
   }
-  return {score:clamp((path-.07)/.26)*.45+clamp((turns)/2)*.35+clamp((spanX-.04)/.18)*.20,path,turns};
+
+  // Z should have three strokes: horizontal-ish, diagonal back across, then
+  // horizontal-ish again. Mirroring is accepted, but random motion is not.
+  const p0=pointAt(.05), p1=pointAt(.32), p2=pointAt(.68), p3=pointAt(.95);
+  const a=vec(p0,p1), b=vec(p1,p2), c=vec(p2,p3);
+  const horiz=v=>clamp((Math.abs(v.x)-Math.abs(v.y)*.65)/.13 + .45);
+  const diagonal=clamp((Math.min(Math.abs(b.x),Math.abs(b.y))-.025)/.13);
+  const sameOuterDir = Math.sign(a.x)===Math.sign(c.x) ? 1 : 0;
+  const middleBack = Math.sign(a.x)!==Math.sign(b.x) ? 1 : 0;
+  const enoughPath=clamp((path-.10)/.34);
+  const structure=clamp(
+    horiz(a)*.22 + horiz(c)*.22 + diagonal*.24 +
+    sameOuterDir*.12 + middleBack*.12 + enoughPath*.08
+  );
+  return {score:structure,path,structure};
 }
 
 function ruleScore(letter,f){
@@ -222,14 +269,24 @@ function ruleScore(letter,f){
 function evaluate(letter, f){
   const rule=clamp(ruleScore(letter,f));
   const personal=templateSimilarity(letter,f.vector);
-  // Personal templates help ambiguous/static handshapes but never fully override
-  // the motion requirement for J/Z.
-  let shape = personal == null ? rule : clamp(rule*.55 + personal*.45);
+
+  // Calibration can make a small correction for hand proportions, but it cannot
+  // rescue a weak generic handshape score on its own.
+  const personalAdjusted = personal == null
+    ? rule
+    : clamp(rule*.84 + personal*.16);
+
   const motion = (letter==='J'||letter==='Z') ? motionStats(letter).score : 1;
-  if(letter==='J'||letter==='Z') shape=clamp(rule*.7+(personal??rule)*.3);
-  const confidence=clamp(shape*(letter==='J'||letter==='Z' ? (.65+.35*motion) : 1));
+  const shape = personalAdjusted;
+
+  // J/Z are motion-gated. If the path is wrong, confidence cannot pass even if
+  // the static starting handshape looks right.
+  const confidence = (letter==='J'||letter==='Z')
+    ? clamp(shape*.58 + motion*.42) * (motion < .52 ? .72 : 1)
+    : shape;
+
   return {
-    confidence:Math.round(confidence*100),
+    confidence:Math.round(clamp(confidence)*100),
     shape:Math.round(shape*100),
     motion:Math.round(motion*100),
     personal:personal==null?null:Math.round(personal*100),
@@ -237,11 +294,102 @@ function evaluate(letter, f){
 }
 
 function feedbackFor(letter,e){
-  if(e.confidence>=82) return ['good', `Strong match for ${letter}. ${e.personal!=null?'Your personal template helped.':''}`];
-  if(e.confidence>=64) return ['warn', `Looks fairly consistent with ${letter}. Hold it steady for another moment.`];
-  if((letter==='J'||letter==='Z') && e.motion<45) return ['', `${letter} needs visible motion. Keep the whole movement inside the camera frame.`];
-  if(['A','S','M','N','T'].includes(letter)) return ['', `${letter} is a subtle fist-family handshape. If the check feels wrong, use “Teach this letter” once or twice.`];
+  if(e.confidence>=85) return ['good', `Strong match for ${letter}. Hold it steady to advance.`];
+  if(e.confidence>=75) return ['warn', `Close. Keep ${letter} steady and let the confidence settle.`];
+  if((letter==='J'||letter==='Z') && e.motion<52) {
+    return ['', `${letter} needs the expected path shape. Random movement will not count.`];
+  }
+  if(CALIBRATABLE_LETTERS.has(letter)) {
+    return ['', `${letter} is a subtle handshape. If the generic check consistently misses a correct sign, you can calibrate your hand once.`];
+  }
   return ['', `Not confident yet. Check finger extension, thumb placement, and palm orientation.`];
+}
+
+
+function resetHold(message=null){
+  holdStartedAt=null;
+  holdPeak=0;
+  holdProgressEl.style.width='0%';
+  if(message){
+    checkerStatus.className='checker-status wait';
+    checkerStatus.textContent=message;
+  }
+}
+
+function autoCheck(letter,e){
+  if(!checkingActive || teaching || performance.now()<cooldownUntil) return;
+
+  const threshold=Number(thresholdSelect.value||DEFAULT_PASS_THRESHOLD);
+  const holdMs=Number(holdSelect.value||DEFAULT_HOLD_MS);
+  const trackingOk=(latestObservation?.tracking||0)>=60;
+  const motionOk=!['J','Z'].includes(letter) || e.motion>=55;
+  const passing=e.confidence>=threshold && trackingOk && motionOk;
+
+  if(!passing){
+    resetHold(
+      !trackingOk
+        ? 'Keep your full signing hand visible.'
+        : ['J','Z'].includes(letter) && !motionOk
+          ? `${letter}: waiting for the correct motion path…`
+          : `Get ${letter} to ${threshold}% and keep it there.`
+    );
+    return;
+  }
+
+  const now=performance.now();
+  if(holdStartedAt==null) holdStartedAt=now;
+  holdPeak=Math.max(holdPeak,e.confidence);
+  const elapsed=now-holdStartedAt;
+  const progress=clamp(elapsed/holdMs);
+  holdProgressEl.style.width=`${Math.round(progress*100)}%`;
+  checkerStatus.className='checker-status pass';
+  checkerStatus.textContent=`Got ${letter} — hold ${Math.max(0,(holdMs-elapsed)/1000).toFixed(1)}s`;
+
+  if(progress<1) return;
+
+  results[letter]={
+    ...e,
+    confidence:Math.max(e.confidence,holdPeak),
+    autoPassed:true,
+    threshold,
+    holdMs,
+  };
+
+  holdStartedAt=null;
+  holdPeak=0;
+  holdProgressEl.style.width='100%';
+  checkerStatus.textContent=`✓ ${letter} accepted`;
+
+  if(currentIndex===LETTERS.length-1){
+    checkingActive=false;
+    checkButton.textContent='Start checking';
+    setTimeout(showResults,450);
+    return;
+  }
+
+  currentIndex++;
+  motionFrames=[];
+  latestObservation=null;
+  cooldownUntil=performance.now()+420;
+  renderGrid();
+  targetLetter.textContent=LETTERS[currentIndex];
+  setTimeout(()=>{
+    holdProgressEl.style.width='0%';
+    checkerStatus.className='checker-status';
+    checkerStatus.textContent=`Now sign ${LETTERS[currentIndex]}.`;
+  },380);
+}
+
+function toggleChecking(){
+  checkingActive=!checkingActive;
+  holdStartedAt=null;
+  holdPeak=0;
+  holdProgressEl.style.width='0%';
+  checkButton.textContent=checkingActive?'Pause checking':'Start checking';
+  checkerStatus.className=`checker-status ${checkingActive?'pass':'paused'}`;
+  checkerStatus.textContent=checkingActive
+    ? `Checking started. Sign ${LETTERS[currentIndex]}.`
+    : 'Checking paused. Your place is saved.';
 }
 
 function drawHand(lm){
@@ -266,6 +414,8 @@ function updateUI(){
   const letter=LETTERS[currentIndex];
   targetLetter.textContent=letter;
   teachLetter.textContent=letter;
+  teachButton.classList.toggle('hidden', !CALIBRATABLE_LETTERS.has(letter));
+  teachNote.classList.add('hidden');
   prevButton.disabled=currentIndex===0;
   nextButton.textContent=currentIndex===LETTERS.length-1?'Finish A–Z':'Next →';
   renderGrid();
@@ -289,6 +439,7 @@ function updateUI(){
   const [klass,text]=feedbackFor(letter,e);
   feedback.className=`feedback ${klass}`;
   feedback.textContent=text;
+  autoCheck(letter,e);
 }
 
 function renderGrid(){
@@ -313,15 +464,21 @@ function captureCurrent(){
 
 function next(){
   captureCurrent();
+  resetHold();
   if(currentIndex===LETTERS.length-1){showResults();return;}
   currentIndex++;
   motionFrames=[];
+  latestObservation=null;
+  cooldownUntil=performance.now()+350;
   updateUI();
 }
 function previous(){
   captureCurrent();
+  resetHold();
   currentIndex=Math.max(0,currentIndex-1);
   motionFrames=[];
+  latestObservation=null;
+  cooldownUntil=performance.now()+350;
   updateUI();
 }
 
@@ -419,7 +576,9 @@ function renderLoop(){
           const samples=teaching.samples;
           const length=samples[0]?.length||0;
           const mean=Array.from({length},(_,i)=>avg(samples.map(s=>s[i])));
-          templates[teaching.letter]=[...(templates[teaching.letter]||[]),mean].slice(-5);
+          // Keep one recent calibration per subtle letter. Repeated calibration
+          // cannot stack its way into an artificial high-confidence score.
+          templates[teaching.letter]=[mean];
           saveTemplates();
           cameraBadge.textContent=`Saved ${teaching.letter} template locally`;
           teaching=null;
@@ -439,12 +598,16 @@ function renderLoop(){
 }
 
 function teachCurrent(){
+  const letter=LETTERS[currentIndex];
+  if(!CALIBRATABLE_LETTERS.has(letter)) return;
   if(!latestObservation){
     feedback.className='feedback warn';
     feedback.textContent='Show your hand clearly first, then tap Teach this letter.';
     return;
   }
-  const letter=LETTERS[currentIndex];
+  checkingActive=false;
+  checkButton.textContent='Start checking';
+  resetHold();
   teaching={letter,started:performance.now(),samples:[]};
   teachNote.classList.remove('hidden');
   cameraBadge.textContent=`Learning ${letter}…`;
@@ -454,12 +617,15 @@ function showResults(){
   captureCurrent();
   cameraCard.classList.add('hidden');
   resultsCard.classList.remove('hidden');
-  const vals=LETTERS.map(l=>results[l]?.confidence).filter(Number.isFinite);
-  const average=vals.length?Math.round(avg(vals)):0;
-  const strong=vals.filter(v=>v>=82).length;
-  const templateCount=Object.values(templates).reduce((n,arr)=>n+(arr?.length||0),0);
+  const vals=LETTERS.map(l=>results[l]?.confidence ?? 0);
+  const attempted=LETTERS.filter(l=>results[l]).length;
+  const average=attempted?Math.round(
+    LETTERS.filter(l=>results[l]).map(l=>results[l].confidence).reduce((a,b)=>a+b,0)/attempted
+  ):0;
+  const strong=LETTERS.filter(l=>results[l]?.autoPassed).length;
+  const templateCount=Object.keys(templates).filter(letter=>templates[letter]?.length).length;
   document.getElementById('resultAverage').textContent=`${average}%`;
-  document.getElementById('resultStrong').textContent=`${strong}/${LETTERS.length}`;
+  document.getElementById('resultStrong').textContent=`${strong}/${attempted || LETTERS.length}`;
   document.getElementById('resultTemplates').textContent=templateCount;
   const rows=document.getElementById('resultRows');
   rows.innerHTML='';
@@ -479,6 +645,14 @@ function restart(){
   results={};
   currentIndex=0;
   motionFrames=[];
+  latestObservation=null;
+  checkingActive=false;
+  holdStartedAt=null;
+  holdPeak=0;
+  holdProgressEl.style.width='0%';
+  checkButton.textContent='Start checking';
+  checkerStatus.className='checker-status';
+  checkerStatus.innerHTML='Camera is ready. Tap <b>Start checking</b> when you want ASLingo to begin A–Z.';
   resultsCard.classList.add('hidden');
   cameraCard.classList.remove('hidden');
   updateUI();
@@ -491,6 +665,7 @@ function stopCamera(){
 }
 
 startCameraButton.addEventListener('click',startCamera);
+checkButton.addEventListener('click',toggleChecking);
 prevButton.addEventListener('click',previous);
 nextButton.addEventListener('click',next);
 teachButton.addEventListener('click',teachCurrent);

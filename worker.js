@@ -13,7 +13,7 @@ function decodeXml(value = '') {
 
 const GROUPS = [
   ['medical', ['doctor','nurse','hospital','medicine','medical','health','sick','pain','hurt','blood','surgery','disease','injury','therapy','dentist','pregnant']],
-  ['food-drink', ['food','eat','drink','water','coffee','tea','milk','breakfast','lunch','dinner','restaurant','hungry','thirsty','fruit','vegetable','meat','bread','cook','kitchen']],
+  ['food-drink', ['food','eat','drink','water','coffee','tea','milk','breakfast','lunch','dinner','restaurant','hungry','thirsty','fruit','vegetable','meat','bread','cook','kitchen','protein']],
   ['people-family', ['family','mother','mom','father','dad','parent','brother','sister','grandma','grandmother','grandpa','grandfather','husband','wife','child','children','baby','friend','person','people','boy','girl','man','woman','aunt','uncle','cousin']],
   ['feelings', ['happy','sad','angry','mad','love','hate','excited','nervous','afraid','scared','fear','emotion','feel','feeling','proud','embarrassed','surprised','worried','frustrated','bored','jealous']],
   ['school', ['school','student','teacher','class','college','university','learn','study','homework','test','quiz','book','read','write','education','degree','lesson']],
@@ -82,9 +82,21 @@ function findVideo(html) {
   return mp4 ? absoluteUrl(mp4) : null;
 }
 
+async function resolveUpstreamVideo(id) {
+  const sourceUrl = `https://aslsignbank.com/dictionary/gloss/${id}.html`;
+  const response = await fetch(sourceUrl, {
+    headers: {
+      'User-Agent': 'ASLingo/0.2 personal noncommercial learning tool',
+      'Accept': 'text/html,application/xhtml+xml',
+    },
+  });
+  if (!response.ok) throw new Error(`Sign page returned ${response.status}`);
+  return { sourceUrl, videoUrl: findVideo(await response.text()) };
+}
+
 async function signsResponse() {
   try {
-    const response = await fetch(ECV_URL, { headers: { 'User-Agent': 'ASLingo/0.1 personal noncommercial learning tool' } });
+    const response = await fetch(ECV_URL, { headers: { 'User-Agent': 'ASLingo/0.2 personal noncommercial learning tool' } });
     if (!response.ok) throw new Error(`Signbank ECV returned ${response.status}`);
     const signs = parseEcv(await response.text());
     return Response.json({
@@ -102,24 +114,70 @@ async function videoResponse(request) {
   const url = new URL(request.url);
   const id = url.searchParams.get('id');
   if (!/^\d{1,8}$/.test(id || '')) return Response.json({ error: 'A numeric Signbank id is required.' }, { status: 400 });
-  const sourceUrl = `https://aslsignbank.com/dictionary/gloss/${id}.html`;
   try {
-    const response = await fetch(sourceUrl, { headers: { 'User-Agent': 'ASLingo/0.1 personal noncommercial learning tool' } });
-    if (!response.ok) throw new Error(`Sign page returned ${response.status}`);
-    const videoUrl = findVideo(await response.text());
+    const { sourceUrl, videoUrl } = await resolveUpstreamVideo(id);
     if (!videoUrl) return Response.json({ id: Number(id), sourceUrl, videoUrl: null, unavailable: true }, { status: 404 });
-    return Response.json({ id: Number(id), sourceUrl, videoUrl }, { headers: { 'Cache-Control': 'public, max-age=86400, s-maxage=86400' } });
+    const proxiedUrl = new URL('/api/video-stream', url.origin);
+    proxiedUrl.searchParams.set('id', id);
+    return Response.json({
+      id: Number(id),
+      sourceUrl,
+      videoUrl: proxiedUrl.toString(),
+    }, { headers: { 'Cache-Control': 'public, max-age=86400, s-maxage=86400' } });
   } catch (error) {
-    return Response.json({ error: error.message || 'Unable to resolve sign video.', sourceUrl }, { status: 502 });
+    return Response.json({ error: error.message || 'Unable to resolve sign video.' }, { status: 502 });
+  }
+}
+
+async function videoStreamResponse(request) {
+  const url = new URL(request.url);
+  const id = url.searchParams.get('id');
+  if (!/^\d{1,8}$/.test(id || '')) return new Response('Invalid sign id', { status: 400 });
+
+  try {
+    const { sourceUrl, videoUrl } = await resolveUpstreamVideo(id);
+    if (!videoUrl) return new Response('Video unavailable', { status: 404 });
+
+    const headers = new Headers({
+      'User-Agent': 'ASLingo/0.2 personal noncommercial learning tool',
+      'Referer': sourceUrl,
+      'Accept': 'video/mp4,video/*;q=0.9,*/*;q=0.8',
+    });
+    const range = request.headers.get('Range');
+    if (range) headers.set('Range', range);
+
+    const upstream = await fetch(videoUrl, { headers, redirect: 'follow' });
+    if (!upstream.ok && upstream.status !== 206) {
+      return new Response(`Upstream video returned ${upstream.status}`, { status: 502 });
+    }
+
+    const outHeaders = new Headers();
+    for (const name of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified']) {
+      const value = upstream.headers.get(name);
+      if (value) outHeaders.set(name, value);
+    }
+    if (!outHeaders.has('content-type')) outHeaders.set('Content-Type', 'video/mp4');
+    outHeaders.set('Cache-Control', range ? 'public, max-age=86400' : 'public, max-age=604800, s-maxage=604800');
+    outHeaders.set('Access-Control-Allow-Origin', '*');
+    outHeaders.set('Cross-Origin-Resource-Policy', 'cross-origin');
+
+    return new Response(upstream.body, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: outHeaders,
+    });
+  } catch (error) {
+    return new Response(error.message || 'Unable to stream sign video', { status: 502 });
   }
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === '/api/health') return Response.json({ ok: true, app: 'ASLingo', version: '0.1.0' });
+    if (url.pathname === '/api/health') return Response.json({ ok: true, app: 'ASLingo', version: '0.2.0' });
     if (url.pathname === '/api/signs') return signsResponse();
     if (url.pathname === '/api/video') return videoResponse(request);
+    if (url.pathname === '/api/video-stream') return videoStreamResponse(request);
     if (url.pathname.startsWith('/api/')) return Response.json({ error: 'Not found' }, { status: 404 });
     return env.ASSETS.fetch(request);
   },

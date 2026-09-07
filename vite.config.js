@@ -10,6 +10,7 @@ export default defineConfig({
       input: {
         main: resolve(process.cwd(), 'index.html'),
         friends: resolve(process.cwd(), 'friends.html'),
+        mediaAudit: resolve(process.cwd(), 'media-audit.html'),
       },
     },
   },

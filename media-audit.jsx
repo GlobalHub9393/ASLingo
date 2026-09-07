@@ -57,12 +57,24 @@ function MediaAudit() {
   async function runAudit() {
     setRunning(true);
     setError('');
-    setResults([]);
 
     try {
-      const batchSize = 12;
-      for (let i = 0; i < items.length; i += batchSize) {
-        const batch = items.slice(i, i + batchSize);
+      // Cloudflare Free allows only 50 external subrequests per Worker invocation.
+      // A course concept can require several Signbank page/media checks, so audit
+      // exactly one lesson/sign combination per Worker request.
+      //
+      // Resume safely: keep verified rows and retry unresolved/error rows.
+      const verifiedKeys = new Set(
+        results
+          .filter(row => row.status === 'verified')
+          .map(row => `${row.lesson_slug}::${String(row.sign_key).toLowerCase()}`)
+      );
+      const pending = items.filter(
+        item => !verifiedKeys.has(`${item.lesson}::${item.key.toLowerCase()}`)
+      );
+
+      for (let i = 0; i < pending.length; i++) {
+        const batch = [pending[i]];
         const response = await fetch('/api/course-audit-batch', {
           method: 'POST',
           headers: { 'Content-Type':'application/json' },
@@ -100,7 +112,7 @@ function MediaAudit() {
         }
 
         // Be polite to Signbank and avoid hammering hundreds of pages at once.
-        await sleep(160);
+        await sleep(120);
       }
     } catch (e) {
       setError(errorText(e, 'Media audit stopped.'));

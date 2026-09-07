@@ -95,6 +95,16 @@ async function probeVideo(videoUrl, sourceUrl, cookie = null) {
 
   out = mustReplace(
     out,
+`  return candidates.sort((a, b) => b.score - a.score || a.sign.id - b.sign.id).slice(0, 12).map(x => x.sign);`,
+`  // Keep course resolution under Cloudflare Free's external subrequest budget.
+  // If none of the strongest 8 exact/translation candidates play, flag it for
+  // curation rather than trying 12 variants in one Worker invocation.
+  return candidates.sort((a, b) => b.score - a.score || a.sign.id - b.sign.id).slice(0, 8).map(x => x.sign);`,
+    'course candidate cap'
+  );
+
+  out = mustReplace(
+    out,
 `    if (!resolved.videoUrl || !(await probeVideo(resolved.videoUrl, resolved.sourceUrl))) {`,
 `    if (!resolved.videoUrl || !(await probeVideo(resolved.videoUrl, resolved.sourceUrl, resolved.cookie))) {`,
     'getVerifiedVideo probe'

@@ -573,7 +573,9 @@ function AlphabetLessonPlayer({lesson,letters,allLetters,onClose,onFinish}) {
   }
   return <div className="modal-screen"><div className="modal-bar"><button onClick={onClose}><X/></button><div><b>{lesson.title}</b><small>Alphabet</small></div><span/></div><div className="lesson-stage">
     {phase==='learn'&&letters[index]&&<div className="learning-card"><p className="eyebrow">Letter {index+1}/{letters.length}</p><h1>{letters[index].letter}</h1><LetterVisual letter={letters[index]}/>
-      {letters[index].movement_note&&<p className="tip-box">{letters[index].movement_note}</p>}
+      {(letters[index].movement_note || letters[index].tips) && (
+        <p className="tip-box">{letters[index].movement_note || letters[index].tips}</p>
+      )}
       <button className="primary-button" onClick={()=>{if(index===letters.length-1)setPhase('quiz');else setIndex(i=>i+1)}}>{index===letters.length-1?'Start quiz':'Next letter'}</button></div>}
     {phase==='quiz'&&questions[qIndex]&&<div className="quiz-card in-modal"><p className="eyebrow">Question {qIndex+1}/{questions.length}</p><h2>Which letter is this?</h2><LetterVisual letter={questions[qIndex].target}/>
       <div className="choice-grid">{questions[qIndex].choices.map(c=><button key={c.letter} className={cx('choice',selected===c.letter&&'selected')} disabled={Boolean(selected)} onClick={()=>answer(c.letter)}>{c.letter}</button>)}</div>

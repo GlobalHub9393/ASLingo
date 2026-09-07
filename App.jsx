@@ -27,27 +27,31 @@ function signName(sign) {
   return sign?.display || sign?.translations?.[0] || sign?.gloss || 'Sign';
 }
 
-function resolveCatalogSign(key, catalog) {
-  const target = normalize(key);
-  if (!target || !catalog?.length) return null;
-  let best = null;
-  let bestScore = -1;
+const courseSignCache = new Map();
 
-  for (const sign of catalog) {
-    const display = normalize(sign.display);
-    const gloss = normalize(sign.gloss);
-    const translations = (sign.translations || []).map(normalize);
-    let score = -1;
-    if (translations.includes(target)) score = 120;
-    else if (display === target) score = 115;
-    else if (gloss === target) score = 110;
-    else if (translations.some(t => t.startsWith(target + ' ') || target.startsWith(t + ' '))) score = 85;
-    else if (display.includes(target) || target.includes(display)) score = 75;
-    else if (translations.some(t => t.includes(target) || target.includes(t))) score = 70;
-    else if (gloss.includes(target) || target.includes(gloss)) score = 60;
-    if (score > bestScore) { bestScore = score; best = sign; }
-  }
-  return bestScore >= 60 ? best : null;
+async function resolveCourseSign(key, lessonSlug) {
+  const cacheKey = `${lessonSlug || 'global'}::${normalize(key)}`;
+  if (courseSignCache.has(cacheKey)) return courseSignCache.get(cacheKey);
+
+  const promise = (async () => {
+    const params = new URLSearchParams({ key: String(key || ''), v: '3' });
+    if (lessonSlug) params.set('lesson', lessonSlug);
+    const response = await fetch(`/api/course-sign?${params.toString()}`);
+    if (response.status === 404) return null;
+    const data = await response.json();
+    if (!response.ok || !data?.sign) throw new Error(data?.error || `Could not verify ${key}.`);
+    return {
+      ...data.sign,
+      courseVideoUrl: data.videoUrl,
+      sourceUrl: data.sourceUrl || data.sign.sourceUrl,
+    };
+  })().catch(error => {
+    courseSignCache.delete(cacheKey);
+    throw error;
+  });
+
+  courseSignCache.set(cacheKey, promise);
+  return promise;
 }
 
 function App() {
@@ -445,20 +449,26 @@ function UnitCard({unit,lessons,done,completed,blueprintMap,onStart}) {
 }
 
 function CourseLessonPlayer({lesson,blueprint,ensureCatalog,onClose,onFinish}) {
-  const [catalog,setCatalog]=useState(null); const [resolved,setResolved]=useState([]); const [unresolved,setUnresolved]=useState([]);
+  const [resolved,setResolved]=useState([]); const [unresolved,setUnresolved]=useState([]);
   const [phase,setPhase]=useState('loading'); const [index,setIndex]=useState(0); const [notesIndex,setNotesIndex]=useState(0);
   const [questions,setQuestions]=useState([]); const [qIndex,setQIndex]=useState(0); const [selected,setSelected]=useState(null);
   const [answers,setAnswers]=useState([]); const [busy,setBusy]=useState(false); const [score,setScore]=useState(null); const [error,setError]=useState('');
 
-  useEffect(()=>{(async()=>{
+  useEffect(()=>{let live=true;(async()=>{
     try{
-      const cat=await ensureCatalog(); setCatalog(cat);
+      setPhase('loading'); setError(''); setIndex(0); setUnresolved([]);
       const keys=blueprint?.sign_keys||[];
-      const mapped=keys.map(key=>({key,sign:resolveCatalogSign(key,cat)}));
-      setResolved(mapped.filter(x=>x.sign)); setUnresolved(mapped.filter(x=>!x.sign).map(x=>x.key));
-      setPhase(mapped.some(x=>x.sign)?'learn':'notes');
-    }catch(e){setError(errorText(e,'Could not load sign videos.'));setPhase('notes')}
-  })()},[lesson.slug]);
+      const mapped=await Promise.all(keys.map(async key=>{
+        try{return {key,sign:await resolveCourseSign(key,lesson.slug)}}
+        catch{return {key,sign:null}}
+      }));
+      if(!live)return;
+      const good=mapped.filter(x=>x.sign);
+      setResolved(good);
+      setUnresolved(mapped.filter(x=>!x.sign).map(x=>x.key));
+      setPhase(good.length?'learn':'notes');
+    }catch(e){if(live){setError(errorText(e,'Could not prepare this lesson.'));setPhase('notes')}}
+  })();return()=>{live=false}},[lesson.slug]);
 
   const notes=[
     blueprint?.grammar_focus&&{type:'Grammar focus',body:blueprint.grammar_focus},
@@ -471,11 +481,17 @@ function CourseLessonPlayer({lesson,blueprint,ensureCatalog,onClose,onFinish}) {
       const distract=shuffle(resolved.filter(x=>x.sign.id!==target.sign.id)).slice(0,3);
       return {target,choices:shuffle([target,...distract])};
     }).filter(q=>q.choices.length>=2);
-    setQuestions(qs); setPhase(qs.length?'quiz':'production');
+    setAnswers([]); setQIndex(0); setSelected(null); setQuestions(qs); setPhase(qs.length?'quiz':'production');
   }
 
   function afterLearn(){
     if(notes.length){setNotesIndex(0);setPhase('notes')}else startQuiz();
+  }
+
+  function reviewSigns(last=true){
+    if(!resolved.length)return;
+    setIndex(last?resolved.length-1:0);
+    setPhase('learn');
   }
 
   function answerChoice(choice){
@@ -486,10 +502,7 @@ function CourseLessonPlayer({lesson,blueprint,ensureCatalog,onClose,onFinish}) {
   }
 
   function nextQuestion(){
-    if(qIndex===questions.length-1){
-      const all=answers; // selected answer already pushed synchronously through state scheduling; derive below
-      setPhase('production'); return;
-    }
+    if(qIndex===questions.length-1){setPhase('production');return}
     setQIndex(i=>i+1);setSelected(null);
   }
 
@@ -505,21 +518,25 @@ function CourseLessonPlayer({lesson,blueprint,ensureCatalog,onClose,onFinish}) {
     <div className="modal-bar"><button onClick={onClose}><X/></button><div><b>{lesson.title}</b><small>{lesson.objective}</small></div><span/></div>
     <div className="lesson-stage">
       {error&&<div className="error-banner">{error}</div>}
-      {phase==='loading'&&<FullScreenLoading label="Preparing lesson…"/>}
+      {phase==='loading'&&<FullScreenLoading label="Verifying lesson videos…"/>}
       {phase==='learn'&&resolved[index]&&<div className="learning-card">
         <p className="eyebrow">Learn {index+1} of {resolved.length}</p>
         <h1>{resolved[index].key}</h1>
         <SignVideo sign={resolved[index].sign}/>
-        <div className="translation-line">Signbank gloss: <b>{resolved[index].sign.gloss}</b></div>
-        <button className="primary-button" onClick={()=>{
-          if(index===resolved.length-1)afterLearn();else setIndex(i=>i+1);
-        }}>{index===resolved.length-1?'Continue':'Next sign'} <ChevronRight size={18}/></button>
-        {unresolved.length>0&&<p className="tiny-note">{unresolved.length} course term{unresolved.length===1?'':'s'} could not be matched to a usable dictionary entry and will be skipped for now.</p>}
+        <div className="translation-line">Verified Signbank gloss: <b>{resolved[index].sign.gloss}</b></div>
+        <div className="lesson-nav-row">
+          <button className="lesson-nav-button" disabled={index===0} onClick={()=>setIndex(i=>Math.max(0,i-1))}><ArrowLeft size={18}/> Previous</button>
+          <button className="primary-button" onClick={()=>{
+            if(index===resolved.length-1)afterLearn();else setIndex(i=>i+1);
+          }}>{index===resolved.length-1?'Continue':'Next sign'} <ChevronRight size={18}/></button>
+        </div>
+        {unresolved.length>0&&index===0&&<p className="tiny-note">ASLingo automatically skipped {unresolved.length} source entr{unresolved.length===1?'y':'ies'} that could not be verified. No broken video cards will be used in the lesson.</p>}
       </div>}
       {phase==='notes'&&<div className="note-card">
         {notes.length?<><p className="eyebrow">{notes[notesIndex]?.type}</p><h2>Use the language, not English word-for-word.</h2><p>{notes[notesIndex]?.body}</p>
+          {resolved.length>0&&<button className="secondary-button review-button" onClick={()=>reviewSigns(true)}><ArrowLeft size={17}/> Review signs</button>}
           <button className="primary-button" onClick={()=>{if(notesIndex===notes.length-1)startQuiz();else setNotesIndex(i=>i+1)}}>Got it <ChevronRight size={18}/></button></>
-          :<><h2>Ready for a quick check?</h2><button className="primary-button" onClick={startQuiz}>Start quiz</button></>}
+          :<><h2>Ready for a quick check?</h2>{resolved.length>0&&<button className="secondary-button review-button" onClick={()=>reviewSigns(true)}><ArrowLeft size={17}/> Review signs</button>}<button className="primary-button" onClick={startQuiz}>Start quiz</button></>}
       </div>}
       {phase==='quiz'&&questions[qIndex]&&<div className="quiz-card in-modal">
         <div className="progress-line"><span style={{width:`${qIndex/questions.length*100}%`}}/></div>
@@ -528,15 +545,17 @@ function CourseLessonPlayer({lesson,blueprint,ensureCatalog,onClose,onFinish}) {
         <div className="answer-list">{questions[qIndex].choices.map(c=>{
           const picked=selected===c.sign.id; const correct=c.sign.id===questions[qIndex].target.sign.id;
           return <button key={c.sign.id} disabled={Boolean(selected)} className={cx('answer-choice',selected&&correct&&'correct',picked&&!correct&&'wrong')} onClick={()=>answerChoice(c)}>
-            {c.key}{selected&&correct&&<Check size={18}/>}
+            {c.key}{selected&&correct&&<Check size={18}/>} 
           </button>
         })}</div>
+        {!selected&&<button className="text-button review-text-button" onClick={()=>reviewSigns(false)}><ArrowLeft size={16}/> Review lesson signs</button>}
         {selected&&<button className="primary-button" onClick={nextQuestion}>{qIndex===questions.length-1?'Continue':'Next question'}</button>}
       </div>}
       {phase==='production'&&<div className="production-card">
         <div className="production-icon">🤟</div><p className="eyebrow">Sign it yourself</p><h2>Production challenge</h2>
         <p>{blueprint?.production_prompt||'Use the signs from this lesson in a short response.'}</p>
         <p className="muted">No camera grading yet. Sign the prompt naturally, then continue when you are satisfied with your attempt.</p>
+        {resolved.length>0&&<button className="secondary-button review-button" onClick={()=>reviewSigns(false)}><ArrowLeft size={17}/> Review signs again</button>}
         <button className="primary-button" disabled={busy} onClick={finish}>{busy?'Saving…':'I did it'}</button>
       </div>}
       {phase==='done'&&<div className="result-card"><div className="result-ring">{score}%</div><p className="eyebrow">Lesson complete</p><h1>{score>=80?'Nice work.':'Keep building it.'}</h1>
@@ -548,13 +567,17 @@ function CourseLessonPlayer({lesson,blueprint,ensureCatalog,onClose,onFinish}) {
 }
 
 function SignVideo({sign,compact=false}) {
-  const [state,setState]=useState({loading:true,url:null,error:null});
-  useEffect(()=>{let live=true;setState({loading:true,url:null,error:null});
+  const knownUrl=sign?.courseVideoUrl||null;
+  const [state,setState]=useState({loading:!knownUrl,url:knownUrl,error:null});
+  useEffect(()=>{let live=true;
+    if(knownUrl){setState({loading:false,url:knownUrl,error:null});return()=>{live=false}}
+    setState({loading:true,url:null,error:null});
     fetch(`/api/video?id=${encodeURIComponent(sign.id)}`).then(async r=>{const d=await r.json();if(!r.ok||!d.videoUrl)throw new Error(d.error||'Video unavailable');if(live)setState({loading:false,url:d.videoUrl,error:null})})
-      .catch(e=>live&&setState({loading:false,url:null,error:e.message}));return()=>{live=false}},[sign.id]);
+      .catch(e=>live&&setState({loading:false,url:null,error:e.message}));return()=>{live=false}
+  },[sign.id,knownUrl]);
   if(state.loading)return <div className={cx('video-box',compact&&'compact')}><LoaderCircle className="spin"/></div>;
   if(state.error||!state.url)return <div className={cx('video-box','video-fallback',compact&&'compact')}><Play size={34}/><b>Video unavailable</b><small>{sign.gloss}</small></div>;
-  return <div className={cx('video-box',compact&&'compact')}><video src={state.url} controls playsInline preload="metadata"/></div>;
+  return <div className={cx('video-box',compact&&'compact')}><video src={state.url} controls playsInline preload="metadata" onError={()=>setState({loading:false,url:null,error:'Video playback failed'})}/></div>;
 }
 
 function AlphabetLessonPlayer({lesson,letters,allLetters,onClose,onFinish}) {
@@ -576,7 +599,10 @@ function AlphabetLessonPlayer({lesson,letters,allLetters,onClose,onFinish}) {
       {(letters[index].movement_note || letters[index].tips) && (
         <p className="tip-box">{letters[index].movement_note || letters[index].tips}</p>
       )}
-      <button className="primary-button" onClick={()=>{if(index===letters.length-1)setPhase('quiz');else setIndex(i=>i+1)}}>{index===letters.length-1?'Start quiz':'Next letter'}</button></div>}
+      <div className="lesson-nav-row">
+        <button className="lesson-nav-button" disabled={index===0} onClick={()=>setIndex(i=>Math.max(0,i-1))}><ArrowLeft size={18}/> Previous</button>
+        <button className="primary-button" onClick={()=>{if(index===letters.length-1)setPhase('quiz');else setIndex(i=>i+1)}}>{index===letters.length-1?'Start quiz':'Next letter'} <ChevronRight size={18}/></button>
+      </div></div>}
     {phase==='quiz'&&questions[qIndex]&&<div className="quiz-card in-modal"><p className="eyebrow">Question {qIndex+1}/{questions.length}</p><h2>Which letter is this?</h2><LetterVisual letter={questions[qIndex].target}/>
       <div className="choice-grid">{questions[qIndex].choices.map(c=><button key={c.letter} className={cx('choice',selected===c.letter&&'selected')} disabled={Boolean(selected)} onClick={()=>answer(c.letter)}>{c.letter}</button>)}</div>
       {selected&&<button className="primary-button" disabled={busy} onClick={next}>{qIndex===questions.length-1?'Finish':'Next'}</button>}</div>}

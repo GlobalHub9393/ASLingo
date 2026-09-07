@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#f4f7fb" />
+  <title>ASLingo Local Camera Beta</title>
+  <link rel="stylesheet" href="/local-camera.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <button class="back" id="backButton" aria-label="Back to ASLingo">←</button>
+      <div>
+        <p class="eyebrow">Optional beta · on-device</p>
+        <h1>Local Camera Practice</h1>
+      </div>
+      <div class="privacy-pill">No video upload</div>
+    </header>
+
+    <section class="intro-card" id="introCard">
+      <div class="hero-icon">✋</div>
+      <p class="eyebrow">MediaPipe proof of concept</p>
+      <h2>Can ASLingo check your alphabet without Gemini?</h2>
+      <p>
+        This beta tracks your hand landmarks directly on this device. It does not send
+        your camera frames to the ASLingo server or Gemini.
+      </p>
+      <div class="mini-grid">
+        <div><b>21</b><span>landmarks / hand</span></div>
+        <div><b>A–Z</b><span>target checks</span></div>
+        <div><b>0</b><span>AI API calls</span></div>
+      </div>
+      <button class="primary" id="startCameraButton">Turn on camera</button>
+      <p class="fineprint">
+        Beta note: this is a constrained handshape checker, not a certified ASL
+        interpreter. J and Z also use motion. A/S/M/N/T are especially subtle from
+        landmarks alone, so you can optionally teach ASLingo your own handshape.
+      </p>
+    </section>
+
+    <section class="camera-card hidden" id="cameraCard">
+      <div class="camera-wrap">
+        <video id="camera" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="camera-badge" id="cameraBadge">Loading hand model…</div>
+        <div class="fps-badge" id="fpsBadge">0 fps</div>
+      </div>
+
+      <div class="prompt-panel">
+        <div>
+          <p class="eyebrow">Target letter</p>
+          <div class="target-letter" id="targetLetter">A</div>
+        </div>
+        <div class="score-box">
+          <div class="ring" id="scoreRing"><span id="scoreValue">—</span></div>
+          <span id="scoreLabel">Show your hand</span>
+        </div>
+      </div>
+
+      <div class="feedback" id="feedback">
+        Keep your signing hand visible from the wrist through the fingertips.
+      </div>
+
+      <div class="confidence-strip">
+        <div>
+          <span>Shape match</span>
+          <b id="shapeScore">—</b>
+        </div>
+        <div>
+          <span>Motion</span>
+          <b id="motionScore">—</b>
+        </div>
+        <div>
+          <span>Hand tracked</span>
+          <b id="trackingScore">—</b>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="secondary" id="prevButton">← Previous</button>
+        <button class="secondary" id="teachButton">Teach this letter</button>
+        <button class="primary" id="nextButton">Next →</button>
+      </div>
+
+      <div class="teach-note hidden" id="teachNote">
+        Hold <b id="teachLetter">A</b> naturally for about one second. ASLingo will
+        save a private handshape template only in this browser.
+      </div>
+
+      <div class="alphabet-grid" id="alphabetGrid"></div>
+    </section>
+
+    <section class="results-card hidden" id="resultsCard">
+      <p class="eyebrow">Local A–Z session</p>
+      <h2>Review results</h2>
+      <div class="results-summary">
+        <div><b id="resultAverage">—</b><span>average confidence</span></div>
+        <div><b id="resultStrong">—</b><span>strong matches</span></div>
+        <div><b id="resultTemplates">—</b><span>personal templates</span></div>
+      </div>
+      <div id="resultRows"></div>
+      <button class="primary" id="restartButton">Try A–Z again</button>
+    </section>
+
+    <section class="privacy-card">
+      <b>What stays local?</b>
+      <p>
+        The camera frames and landmark calculations stay on your device. MediaPipe
+        Tasks may send Google performance/utilization metrics, but not your input
+        images or video. Your optional letter templates are stored in this browser.
+      </p>
+    </section>
+  </main>
+
+  <script type="module" src="/local-camera.js"></script>
+</body>
+</html>

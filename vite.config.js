@@ -11,6 +11,7 @@ export default defineConfig({
         main: resolve(process.cwd(), 'index.html'),
         friends: resolve(process.cwd(), 'friends.html'),
         mediaAudit: resolve(process.cwd(), 'media-audit.html'),
+        localCamera: resolve(process.cwd(), 'local-camera.html'),
       },
     },
   },

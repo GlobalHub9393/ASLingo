@@ -1,25 +1,22 @@
-ASLingo Camera Practice Beta
+ASLingo Camera Review - Batch Beta
 
-Upload/replace these ROOT files in GitHub:
-1. camera.html        (new)
-2. worker.js          (replace existing)
-3. build-flat.mjs     (replace existing)
+Replace these ROOT files in GitHub:
+1. camera.html
+2. worker.js
 
-Cloudflare setup required once:
-- Open ASLingo in Cloudflare Pages.
-- Settings -> Variables and Secrets (Production).
-- Add a SECRET named: GEMINI_API_KEY
-- Paste your Google Gemini API key as the value.
-- Redeploy after saving the secret if Cloudflare does not automatically restart the deployment.
+No new Cloudflare secret is required if GEMINI_API_KEY is already set.
 
 Then open:
 https://aslingo.pages.dev/camera.html
 
-Beta scope:
-- Alphabet camera recognition: A-Z, one letter at a time.
-- Unit 1 / First Contact: five guided conversation turns using only studied vocabulary.
-- Displays recognition confidence, prompt match/coverage, signing time, analysis time, and framing quality.
-- Raw video is forwarded for AI analysis and is not stored by ASLingo in this beta.
-- No pass/fail and no proficiency score.
+What changed:
+- Full Alphabet Review: A through Z in ONE continuous recording and ONE Gemini request.
+- Unit 1 Review: five First Contact prompts in ONE continuous recording and ONE Gemini request.
+- Tap Next after each letter/turn; ASLingo records the time boundary for each segment.
+- Alphabet results show per-letter recognition confidence and AI-vs-prompt agreement.
+- Unit 1 results show per-turn recognized signs, confidence, and expected-concept coverage.
+- Total signing time, AI analysis time, and framing quality are shown.
+- Results are experimental recognition metrics, not proficiency grades.
+- Raw clips are analyzed and not stored by ASLingo.
 
-If this beta works well enough, the next step is integrating a Camera Practice card at the end of the Alphabet unit and every completed course unit, plus saving summary metrics to Neon.
+The worker now tries Gemini 2.5 Flash-Lite first and Gemini 3.5 Flash-Lite as a rate-limit fallback.

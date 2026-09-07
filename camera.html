@@ -4,168 +4,366 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <meta name="theme-color" content="#f6f7fb" />
-<title>ASLingo Camera Lab</title>
+<title>ASLingo Camera Review</title>
 <style>
-  *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;background:#f6f7fb;color:#111318}button{font:inherit;cursor:pointer}.shell{max-width:700px;margin:0 auto;padding:calc(18px + env(safe-area-inset-top)) 16px calc(34px + env(safe-area-inset-bottom))}.top{display:flex;align-items:center;gap:12px;margin-bottom:18px}.back{width:44px;height:44px;border:1px solid #dfe2e7;border-radius:14px;background:#fff;font-size:24px}.eyebrow{text-transform:uppercase;letter-spacing:1.5px;font-size:11px;font-weight:800;color:#2d7ff0;margin:0 0 4px}.top h1{font-size:27px;line-height:1.05;margin:0;letter-spacing:-.7px}.muted{color:#747985;line-height:1.45}.card{background:#fff;border:1px solid #e0e3e8;border-radius:22px;padding:18px;margin:12px 0}.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.mode{border:1px solid #dfe2e7;background:#fff;border-radius:18px;padding:16px;text-align:left;min-height:110px}.mode.active{border-color:#2d7ff0;background:#eef5ff}.mode b{display:block;font-size:17px;margin-bottom:5px}.mode span{font-size:12px;color:#777d87;line-height:1.35}.privacy{font-size:12px;color:#686e78;background:#eef1f6;border-radius:14px;padding:12px;line-height:1.45}.camera-wrap{position:relative;aspect-ratio:4/5;background:#111318;border-radius:24px;overflow:hidden;display:grid;place-items:center}.camera-wrap video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}.camera-placeholder{color:#c6cbd4;text-align:center;padding:30px}.camera-placeholder strong{display:block;color:#fff;margin-bottom:7px}.hud{position:absolute;left:12px;right:12px;bottom:12px;display:flex;justify-content:space-between;gap:8px;pointer-events:none}.pill{background:rgba(17,19,24,.72);color:white;border-radius:999px;padding:7px 10px;font-size:11px;backdrop-filter:blur(8px)}.prompt{padding:15px;border-radius:16px;background:#f1f6ff;margin:12px 0}.prompt small{display:block;color:#2b72da;text-transform:uppercase;letter-spacing:1px;font-weight:800;margin-bottom:5px}.prompt strong{font-size:20px;line-height:1.25}.controls{display:grid;grid-template-columns:1fr;gap:9px;margin-top:12px}.primary,.secondary{border:0;border-radius:15px;padding:14px 16px;font-weight:800;min-height:48px}.primary{background:#2b75e8;color:#fff}.primary.recording{background:#c43838}.secondary{background:#eef0f4;color:#222}.primary:disabled,.secondary:disabled{opacity:.5}.status{text-align:center;padding:12px 4px;color:#686f79;font-size:13px}.countdown{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.22);color:#fff;font-weight:900;font-size:84px}.hidden{display:none!important}.results{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin-top:12px}.metric{background:#f3f5f8;border-radius:15px;padding:13px}.metric b{display:block;font-size:23px;margin-bottom:3px}.metric span{font-size:11px;color:#777d87}.recognized{background:#eef7f1;border-radius:16px;padding:14px;margin-top:10px}.recognized small{display:block;color:#27754b;text-transform:uppercase;font-size:10px;font-weight:800;letter-spacing:1px;margin-bottom:5px}.recognized strong{font-size:20px;line-height:1.35}.note{font-size:12px;color:#696f78;line-height:1.45;margin:10px 2px 0}.summary h2{margin:2px 0 8px}.summary-list{display:flex;flex-direction:column;gap:7px}.summary-row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #eceef2;font-size:13px}.error{background:#fff0f0;color:#a12a2a;border:1px solid #ffd1d1;padding:12px;border-radius:14px;margin-top:10px;line-height:1.4}.setup{background:#fff8df;border:1px solid #f0d98d;color:#735f16;padding:12px;border-radius:14px;margin-top:10px;line-height:1.45;font-size:12px}@media(max-width:430px){.mode-grid{grid-template-columns:1fr}.camera-wrap{aspect-ratio:3/4}.results{grid-template-columns:1fr 1fr}}@media(min-width:620px){.camera-wrap{aspect-ratio:16/11}.camera-wrap video{object-fit:contain;background:#111318}}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;background:#f6f7fb;color:#111318}button{font:inherit;cursor:pointer}.shell{max-width:760px;margin:0 auto;padding:calc(18px + env(safe-area-inset-top)) 16px calc(36px + env(safe-area-inset-bottom))}.top{display:flex;align-items:center;gap:12px;margin-bottom:16px}.back{width:44px;height:44px;border:1px solid #dfe2e7;border-radius:14px;background:#fff;font-size:24px}.eyebrow{text-transform:uppercase;letter-spacing:1.4px;font-size:11px;font-weight:850;color:#2d7ff0;margin:0 0 4px}.top h1{font-size:28px;line-height:1.05;margin:0;letter-spacing:-.8px}.muted{color:#747985;line-height:1.45}.card{background:#fff;border:1px solid #e0e3e8;border-radius:22px;padding:18px;margin:12px 0}.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.mode{border:1px solid #dfe2e7;background:#fff;border-radius:18px;padding:16px;text-align:left;min-height:116px}.mode.active{border-color:#2d7ff0;background:#eef5ff}.mode b{display:block;font-size:17px;margin-bottom:6px}.mode span{font-size:12px;color:#777d87;line-height:1.38}.privacy{font-size:12px;color:#686e78;background:#eef1f6;border-radius:14px;padding:12px;line-height:1.45}.prompt{padding:16px;border-radius:17px;background:#f1f6ff;margin:12px 0}.prompt small{display:block;color:#2b72da;text-transform:uppercase;letter-spacing:1px;font-weight:850;margin-bottom:6px}.prompt strong{font-size:24px;line-height:1.2}.prompt p{margin:7px 0 0;color:#666e78;font-size:13px;line-height:1.4}.camera-wrap{position:relative;aspect-ratio:4/5;background:#111318;border-radius:24px;overflow:hidden;display:grid;place-items:center}.camera-wrap video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}.camera-placeholder{color:#c6cbd4;text-align:center;padding:30px}.camera-placeholder strong{display:block;color:#fff;margin-bottom:7px}.hud{position:absolute;left:12px;right:12px;bottom:12px;display:flex;justify-content:space-between;gap:8px;pointer-events:none}.pill{background:rgba(17,19,24,.74);color:white;border-radius:999px;padding:7px 10px;font-size:11px;backdrop-filter:blur(8px)}.countdown{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.28);color:#fff;font-weight:900;font-size:84px}.progress{display:flex;gap:5px;flex-wrap:wrap;margin:11px 0 2px}.progress span{min-width:28px;height:28px;padding:0 7px;border-radius:999px;display:grid;place-items:center;background:#eef0f4;color:#737985;font-size:11px;font-weight:800}.progress span.done{background:#e9f6ee;color:#26724a}.progress span.current{background:#2d7ff0;color:#fff}.controls{display:grid;grid-template-columns:1fr;gap:9px;margin-top:12px}.primary,.secondary{border:0;border-radius:15px;padding:14px 16px;font-weight:850;min-height:49px}.primary{background:#2b75e8;color:#fff}.primary.recording{background:#c43b3b}.secondary{background:#eef0f4;color:#222}.primary:disabled,.secondary:disabled{opacity:.5}.status{text-align:center;padding:11px 3px;color:#686f79;font-size:13px;line-height:1.4}.hidden{display:none!important}.error{background:#fff0f0;color:#a12a2a;border:1px solid #ffd1d1;padding:12px;border-radius:14px;margin-top:10px;line-height:1.4}.setup{background:#fff8df;border:1px solid #f0d98d;color:#735f16;padding:12px;border-radius:14px;margin-top:10px;line-height:1.45;font-size:12px}.metrics{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin:12px 0}.metric{background:#f3f5f8;border-radius:15px;padding:13px}.metric b{display:block;font-size:23px;margin-bottom:3px}.metric span{font-size:11px;color:#777d87}.rows{display:flex;flex-direction:column;gap:8px}.row{border:1px solid #e6e8ec;border-radius:15px;padding:11px 12px}.row-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.row strong{font-size:14px}.row .small{font-size:11px;color:#747985;margin-top:5px;line-height:1.4}.badge{font-size:11px;font-weight:850;border-radius:999px;padding:5px 8px;background:#eef0f4;color:#555c67;white-space:nowrap}.badge.match{background:#e9f6ee;color:#26724a}.badge.unclear{background:#fff6df;color:#7a641e}.result-note{font-size:12px;color:#696f78;line-height:1.45;margin:10px 2px 0}.summary-title{margin:2px 0 0;font-size:22px}.footer-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px}
+@media(max-width:500px){.mode-grid{grid-template-columns:1fr}.camera-wrap{aspect-ratio:3/4}.footer-actions{grid-template-columns:1fr}.prompt strong{font-size:22px}}@media(min-width:620px){.camera-wrap{aspect-ratio:16/11}.camera-wrap video{object-fit:contain;background:#111318}}
 </style>
 </head>
 <body>
 <main class="shell">
   <div class="top">
     <button class="back" id="backBtn" aria-label="Back to ASLingo">‹</button>
-    <div><p class="eyebrow">Experimental beta</p><h1>Camera Practice</h1></div>
+    <div><p class="eyebrow">Camera beta</p><h1>Full Review</h1></div>
   </div>
 
   <section class="card" id="modeCard">
-    <p class="eyebrow">Choose a practice</p>
+    <p class="eyebrow">One recording. One AI request.</p>
     <div class="mode-grid">
-      <button class="mode active" data-mode="alphabet"><b>Alphabet check</b><span>One random letter at a time. ASLingo guesses the letter before comparing it with the prompt.</span></button>
-      <button class="mode" data-mode="conversation"><b>Unit 1 conversation</b><span>Five guided turns using only First Contact vocabulary you've already studied.</span></button>
+      <button class="mode active" data-mode="alphabet_session">
+        <b>Full alphabet A–Z</b>
+        <span>Sign all 26 letters in one continuous recording. Tap Next after each letter.</span>
+      </button>
+      <button class="mode" data-mode="unit1_session">
+        <b>Unit 1 review</b>
+        <span>Five First Contact conversation prompts in one continuous recording.</span>
+      </button>
     </div>
-    <p class="privacy">Your clip is sent only for AI analysis and is not saved by ASLingo in this beta. Results are confidence estimates, not a proficiency grade.</p>
+    <p class="privacy">The raw clip is sent for AI analysis only and is not saved by ASLingo. Confidence and agreement are experimental recognition metrics, not a proficiency grade.</p>
   </section>
 
   <section class="card">
-    <div class="prompt"><small id="promptLabel">Alphabet prompt</small><strong id="promptText">Tap Start camera, then we'll pick a letter.</strong></div>
+    <div class="prompt">
+      <small id="promptLabel">Full alphabet review</small>
+      <strong id="promptText">Start the camera when you’re ready.</strong>
+      <p id="promptHint">You’ll sign A through Z without stopping the recording.</p>
+    </div>
+
+    <div class="progress" id="progress"></div>
+
     <div class="camera-wrap">
       <video id="preview" playsinline muted></video>
       <div class="camera-placeholder" id="placeholder"><strong>Camera is off</strong>Keep your full upper body, hands, and face in frame.</div>
       <div class="countdown hidden" id="countdown">3</div>
-      <div class="hud"><span class="pill" id="timerPill">Ready</span><span class="pill">Front camera</span></div>
+      <div class="hud"><span class="pill" id="timerPill">Ready</span><span class="pill" id="sessionPill">Alphabet A–Z</span></div>
     </div>
+
     <div class="controls">
       <button class="primary" id="cameraBtn">Start camera</button>
-      <button class="primary hidden" id="recordBtn">Record attempt</button>
-      <button class="secondary hidden" id="nextBtn">Next prompt</button>
+      <button class="primary hidden" id="startBtn">Start full review</button>
+      <button class="primary recording hidden" id="advanceBtn">Next letter</button>
+      <button class="secondary hidden" id="cancelBtn">Cancel recording</button>
     </div>
-    <div class="status" id="status">No score. We'll show recognition confidence, prompt match, signing time, and analysis time.</div>
+    <div class="status" id="status">This review uses one Gemini request after the entire session is finished.</div>
     <div class="error hidden" id="errorBox"></div>
-    <div class="setup hidden" id="setupBox">AI recognition is not configured yet. Add the Cloudflare secret <b>GEMINI_API_KEY</b> to enable analysis.</div>
+    <div class="setup hidden" id="setupBox">AI recognition is not configured. Add the Cloudflare secret <b>GEMINI_API_KEY</b>.</div>
   </section>
 
   <section class="card hidden" id="resultCard">
-    <p class="eyebrow">Attempt result</p>
-    <div class="recognized"><small>ASLingo thinks you signed</small><strong id="recognizedText">—</strong></div>
-    <div class="results">
-      <div class="metric"><b id="confidenceMetric">—</b><span>Recognition confidence</span></div>
-      <div class="metric"><b id="matchMetric">—</b><span id="matchLabel">Prompt match</span></div>
-      <div class="metric"><b id="signingMetric">—</b><span>Signing time</span></div>
-      <div class="metric"><b id="analysisMetric">—</b><span>Analysis time</span></div>
+    <p class="eyebrow" id="resultEyebrow">Review complete</p>
+    <h2 class="summary-title" id="resultTitle">Session results</h2>
+    <div class="metrics">
+      <div class="metric"><b id="confidenceMetric">—</b><span>Average AI confidence</span></div>
+      <div class="metric"><b id="accuracyMetric">—</b><span id="accuracyLabel">AI target agreement</span></div>
+      <div class="metric"><b id="signingMetric">—</b><span>Total signing session</span></div>
+      <div class="metric"><b id="analysisMetric">—</b><span>AI analysis time</span></div>
     </div>
-    <p class="note" id="resultNote"></p>
-  </section>
-
-  <section class="card summary hidden" id="summaryCard">
-    <p class="eyebrow">Conversation complete</p><h2>Session summary</h2>
-    <div class="summary-list" id="summaryList"></div>
-    <button class="secondary" id="restartBtn">Run conversation again</button>
+    <div class="rows" id="resultRows"></div>
+    <p class="result-note" id="resultNote"></p>
+    <div class="footer-actions">
+      <button class="secondary" id="againBtn">Run this review again</button>
+      <button class="primary" id="switchBtn">Try the other review</button>
+    </div>
   </section>
 </main>
+
 <script>
 (() => {
   const $ = id => document.getElementById(id);
   const els = {
-    preview:$('preview'),placeholder:$('placeholder'),cameraBtn:$('cameraBtn'),recordBtn:$('recordBtn'),nextBtn:$('nextBtn'),
-    status:$('status'),countdown:$('countdown'),timer:$('timerPill'),promptText:$('promptText'),promptLabel:$('promptLabel'),
-    error:$('errorBox'),setup:$('setupBox'),resultCard:$('resultCard'),recognized:$('recognizedText'),confidence:$('confidenceMetric'),
-    match:$('matchMetric'),matchLabel:$('matchLabel'),signing:$('signingMetric'),analysis:$('analysisMetric'),note:$('resultNote'),
-    summary:$('summaryCard'),summaryList:$('summaryList'),restart:$('restartBtn'),back:$('backBtn')
+    preview:$('preview'),placeholder:$('placeholder'),cameraBtn:$('cameraBtn'),startBtn:$('startBtn'),
+    advanceBtn:$('advanceBtn'),cancelBtn:$('cancelBtn'),status:$('status'),countdown:$('countdown'),
+    timer:$('timerPill'),sessionPill:$('sessionPill'),promptLabel:$('promptLabel'),promptText:$('promptText'),
+    promptHint:$('promptHint'),progress:$('progress'),error:$('errorBox'),setup:$('setupBox'),
+    resultCard:$('resultCard'),resultEyebrow:$('resultEyebrow'),resultTitle:$('resultTitle'),
+    confidence:$('confidenceMetric'),accuracy:$('accuracyMetric'),accuracyLabel:$('accuracyLabel'),
+    signing:$('signingMetric'),analysis:$('analysisMetric'),rows:$('resultRows'),note:$('resultNote'),
+    again:$('againBtn'),switchBtn:$('switchBtn'),back:$('backBtn'),modeCard:$('modeCard')
   };
 
-  const letters='ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-  const turns=[
-    {id:'intro-name',label:'Turn 1 of 5',text:'Say hello and tell me your name.'},
-    {id:'ask-name',label:'Turn 2 of 5',text:'Ask the other person their name.'},
-    {id:'nice-meet',label:'Turn 3 of 5',text:'Say that it is nice to meet them.'},
-    {id:'where-from',label:'Turn 4 of 5',text:'Ask where the other person is from.'},
-    {id:'repair',label:'Turn 5 of 5',text:'Ask them to please sign again slowly.'},
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  const unitTurns = [
+    {id:'intro-name', title:'Introduce yourself', text:'Say hello and tell me your name.'},
+    {id:'ask-name', title:'Ask their name', text:'Ask the other person their name.'},
+    {id:'nice-meet', title:'Nice to meet you', text:'Say that it is nice to meet them.'},
+    {id:'where-from', title:'Where are you from?', text:'Ask where the other person is from.'},
+    {id:'repair', title:'Conversation repair', text:'Ask them to please sign again slowly.'},
   ];
 
-  let mode='alphabet',stream=null,recorder=null,chunks=[],currentTarget=null,turnIndex=0,recordStartedAt=0,maxTimer=null,tickTimer=null,results=[];
+  let mode = 'alphabet_session';
+  let stream = null;
+  let recorder = null;
+  let chunks = [];
+  let sessionStartedAt = 0;
+  let currentIndex = 0;
+  let segmentStartedAt = 0;
+  let segments = [];
+  let tickTimer = null;
+  let hardStopTimer = null;
+  let sessionDurationMs = 0;
+  let analyzing = false;
 
-  function show(el, yes=true){el.classList.toggle('hidden',!yes)}
-  function setError(msg=''){els.error.textContent=msg;show(els.error,Boolean(msg))}
-  function setPrompt(){
-    if(mode==='alphabet'){
-      currentTarget=letters[Math.floor(Math.random()*letters.length)];
-      els.promptLabel.textContent='Alphabet prompt';
-      els.promptText.textContent=`Sign the letter ${currentTarget}`;
-    } else {
-      const t=turns[turnIndex];
-      currentTarget=t.id;els.promptLabel.textContent=t.label;els.promptText.textContent=t.text;
-    }
+  function show(el, yes=true){ el.classList.toggle('hidden', !yes); }
+  function setError(msg=''){ els.error.textContent = msg; show(els.error, Boolean(msg)); }
+  function items(){ return mode === 'alphabet_session' ? letters : unitTurns; }
+  function itemLabel(index){
+    return mode === 'alphabet_session' ? letters[index] : `Turn ${index+1}`;
   }
-  function resetResult(){show(els.resultCard,false);show(els.nextBtn,false);els.setup.classList.add('hidden')}
+  function renderProgress(){
+    const list = items();
+    els.progress.innerHTML = list.map((item,index) => {
+      const label = mode === 'alphabet_session' ? item : String(index+1);
+      const cls = index < currentIndex ? 'done' : index === currentIndex && recorder?.state === 'recording' ? 'current' : '';
+      return `<span class="${cls}">${label}</span>`;
+    }).join('');
+  }
+  function renderPrompt(){
+    const list = items();
+    const item = list[Math.min(currentIndex, list.length-1)];
+    if(mode === 'alphabet_session'){
+      els.promptLabel.textContent = `Letter ${Math.min(currentIndex+1,26)} of 26`;
+      els.promptText.textContent = recorder?.state === 'recording' ? `Sign ${item}` : 'Full alphabet A–Z';
+      els.promptHint.textContent = recorder?.state === 'recording'
+        ? 'Hold the handshape clearly, then tap Next letter.'
+        : 'One recording. You’ll tap Next after each letter; the AI only analyzes after Z.';
+      els.sessionPill.textContent = 'Alphabet A–Z';
+      els.advanceBtn.textContent = currentIndex === 25 ? 'Finish alphabet & analyze' : 'Next letter';
+    } else {
+      els.promptLabel.textContent = `Unit 1 · Turn ${Math.min(currentIndex+1,unitTurns.length)} of ${unitTurns.length}`;
+      els.promptText.textContent = recorder?.state === 'recording' ? item.title : 'Unit 1 First Contact review';
+      els.promptHint.textContent = recorder?.state === 'recording'
+        ? item.text
+        : 'Five guided turns, recorded continuously and analyzed in one request.';
+      els.sessionPill.textContent = 'Unit 1 review';
+      els.advanceBtn.textContent = currentIndex === unitTurns.length-1 ? 'Finish Unit 1 & analyze' : 'Next turn';
+    }
+    renderProgress();
+  }
+
   function pickMime(){
     const candidates=['video/mp4;codecs=h264','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
-    return candidates.find(x=>window.MediaRecorder?.isTypeSupported?.(x))||'';
+    return candidates.find(type => window.MediaRecorder?.isTypeSupported?.(type)) || '';
   }
+
   async function startCamera(){
     setError('');
     try{
-      if(!navigator.mediaDevices?.getUserMedia) throw new Error('Camera recording is not supported in this browser.');
-      stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1280},height:{ideal:720}},audio:false});
-      els.preview.srcObject=stream;await els.preview.play();show(els.placeholder,false);els.cameraBtn.textContent='Camera on';els.cameraBtn.disabled=true;show(els.recordBtn,true);setPrompt();
-      els.status.textContent=mode==='alphabet'?'Hold the letter steady for the short capture.':'Use natural signing. You can stop early when your turn is finished.';
-    }catch(e){setError(e.message||'Could not open camera.')}
+      if(!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) throw new Error('Camera recording is not supported in this browser.');
+      stream = await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:'user',width:{ideal:640,max:960},height:{ideal:480,max:720}},
+        audio:false
+      });
+      els.preview.srcObject = stream;
+      await els.preview.play();
+      show(els.placeholder,false);
+      els.cameraBtn.textContent = 'Camera on';
+      els.cameraBtn.disabled = true;
+      show(els.startBtn,true);
+      els.startBtn.textContent = mode === 'alphabet_session' ? 'Start A–Z review' : 'Start Unit 1 review';
+      els.status.textContent = 'Keep both hands, your face, and upper torso visible. Move at a comfortable pace.';
+      renderPrompt();
+    }catch(error){ setError(error.message || 'Could not open the camera.'); }
   }
-  function stopTimers(){clearTimeout(maxTimer);clearInterval(tickTimer);maxTimer=null;tickTimer=null}
+
+  function stopTimers(){
+    clearInterval(tickTimer); clearTimeout(hardStopTimer);
+    tickTimer = null; hardStopTimer = null;
+  }
+
   async function countdown(){
-    show(els.countdown,true);for(let n=3;n>=1;n--){els.countdown.textContent=n;await new Promise(r=>setTimeout(r,650))}els.countdown.textContent='GO';await new Promise(r=>setTimeout(r,350));show(els.countdown,false)
+    show(els.countdown,true);
+    for(let n=3;n>=1;n--){ els.countdown.textContent=n; await new Promise(r=>setTimeout(r,650)); }
+    els.countdown.textContent='GO';
+    await new Promise(r=>setTimeout(r,350));
+    show(els.countdown,false);
   }
-  async function record(){
-    setError('');resetResult();els.recordBtn.disabled=true;await countdown();
-    const mime=pickMime();chunks=[];
-    try{recorder=mime?new MediaRecorder(stream,{mimeType:mime}):new MediaRecorder(stream)}catch(e){recorder=new MediaRecorder(stream)}
-    recorder.ondataavailable=e=>{if(e.data?.size)chunks.push(e.data)};
-    recorder.onstop=analyze;
-    recordStartedAt=performance.now();recorder.start(200);els.recordBtn.textContent='Stop recording';els.recordBtn.classList.add('recording');els.recordBtn.disabled=false;
-    const maxMs=mode==='alphabet'?2600:6500;
-    tickTimer=setInterval(()=>{els.timer.textContent=((performance.now()-recordStartedAt)/1000).toFixed(1)+'s'},100);
-    maxTimer=setTimeout(()=>stopRecording(),maxMs);
-  }
-  function stopRecording(){
-    if(recorder?.state!=='recording')return;stopTimers();recorder.stop();els.recordBtn.disabled=true;els.recordBtn.classList.remove('recording');els.recordBtn.textContent='Analyzing…';els.timer.textContent='Analyzing';
-  }
-  async function analyze(){
-    const durationMs=Math.round(performance.now()-recordStartedAt);const blob=new Blob(chunks,{type:recorder.mimeType||chunks[0]?.type||'video/webm'});const analysisStart=performance.now();
-    try{
-      const url=new URL('/api/asl-analyze',location.origin);url.searchParams.set('mode',mode);if(mode==='alphabet')url.searchParams.set('target',currentTarget);else url.searchParams.set('prompt',currentTarget);
-      const res=await fetch(url,{method:'POST',headers:{'Content-Type':blob.type||'video/webm'},body:blob});
-      const data=await res.json().catch(()=>({}));
-      if(res.status===503&&data.code==='AI_NOT_CONFIGURED'){show(els.setup,true);throw new Error('AI recognition is waiting for the Cloudflare API key.');}
-      if(!res.ok)throw new Error(data.error||`Analysis failed (${res.status}).`);
-      const analysisMs=Math.round(performance.now()-analysisStart);renderResult(data,durationMs,analysisMs);results.push({...data,durationMs,analysisMs,prompt:mode==='alphabet'?currentTarget:turns[turnIndex].text});
-      if(mode==='conversation'&&turnIndex===turns.length-1){renderSummary();show(els.nextBtn,false)}else show(els.nextBtn,true);
-    }catch(e){setError(e.message||'Could not analyze this clip.')}
-    finally{els.recordBtn.disabled=false;els.recordBtn.textContent='Record again';els.timer.textContent='Ready'}
-  }
-  function renderResult(data,durationMs,analysisMs){
-    show(els.resultCard,true);
-    if(mode==='alphabet'){
-      els.recognized.textContent=data.recognized_letter||'Unclear';els.match.textContent=data.target_match?'Matched':'Different';els.matchLabel.textContent='Prompt match';
-    }else{
-      els.recognized.textContent=(data.recognized_sequence||[]).join(' · ')||'Unclear';els.match.textContent=(data.coverage_percent??0)+'%';els.matchLabel.textContent='Expected concepts detected';
+
+  async function beginSession(){
+    if(!stream || analyzing) return;
+    setError(''); show(els.resultCard,false); els.startBtn.disabled=true;
+    await countdown();
+
+    const mime = pickMime();
+    chunks=[]; segments=[]; currentIndex=0; sessionDurationMs=0;
+    const opts = {};
+    if(mime) opts.mimeType = mime;
+    opts.videoBitsPerSecond = 500000;
+    try { recorder = new MediaRecorder(stream, opts); }
+    catch {
+      try { recorder = mime ? new MediaRecorder(stream,{mimeType:mime}) : new MediaRecorder(stream); }
+      catch(error){ els.startBtn.disabled=false; throw error; }
     }
-    els.confidence.textContent=(data.overall_confidence??0)+'%';els.signing.textContent=(durationMs/1000).toFixed(1)+'s';els.analysis.textContent=(analysisMs/1000).toFixed(1)+'s';
-    const framing=data.framing_quality!=null?` Framing ${data.framing_quality}%.`:'';els.note.textContent=(data.note||'')+framing;
-    els.resultCard.scrollIntoView({behavior:'smooth',block:'nearest'});
+
+    recorder.ondataavailable = event => { if(event.data?.size) chunks.push(event.data); };
+    recorder.onstop = () => {
+      if(segments.length === items().length) analyzeSession();
+      else {
+        els.status.textContent = 'Review canceled. Nothing was sent for analysis.';
+        resetSessionUi();
+      }
+    };
+
+    sessionStartedAt = performance.now();
+    segmentStartedAt = 0;
+    recorder.start(500);
+    show(els.startBtn,false); show(els.advanceBtn,true); show(els.cancelBtn,true);
+    els.modeCard.querySelectorAll('button').forEach(button => button.disabled=true);
+    els.status.textContent = 'Recording continuously. Tap the button after each prompt — do not stop the camera.';
+    tickTimer = setInterval(() => {
+      els.timer.textContent = ((performance.now()-sessionStartedAt)/1000).toFixed(1)+'s';
+    },100);
+    hardStopTimer = setTimeout(() => {
+      setError('The review reached the maximum recording time. Please run it again a little faster.');
+      cancelSession();
+    }, mode === 'alphabet_session' ? 180000 : 120000);
+    renderPrompt();
   }
-  function next(){resetResult();if(mode==='conversation')turnIndex++;setPrompt();els.recordBtn.textContent='Record attempt';window.scrollTo({top:0,behavior:'smooth'})}
-  function renderSummary(){
-    show(els.summary,true);const avg=(arr,key)=>Math.round(arr.reduce((s,x)=>s+Number(x[key]||0),0)/Math.max(arr.length,1));
-    const conf=avg(results,'overall_confidence');const cov=avg(results,'coverage_percent');const signing=(results.reduce((s,x)=>s+x.durationMs,0)/Math.max(results.length,1)/1000).toFixed(1);
-    els.summaryList.innerHTML=`<div class="summary-row"><span>Average recognition confidence</span><b>${conf}%</b></div><div class="summary-row"><span>Average prompt coverage</span><b>${cov}%</b></div><div class="summary-row"><span>Average signing time</span><b>${signing}s</b></div><div class="summary-row"><span>Turns completed</span><b>${results.length}/${turns.length}</b></div>`;
-    els.summary.scrollIntoView({behavior:'smooth',block:'nearest'});
+
+  function advance(){
+    if(recorder?.state !== 'recording') return;
+    const elapsed = Math.max(1, Math.round(performance.now()-sessionStartedAt));
+    if(elapsed - segmentStartedAt < 350){
+      setError('Give the sign a little more time before moving on.');
+      return;
+    }
+    setError('');
+    const current = items()[currentIndex];
+    const segment = { start_ms:segmentStartedAt, end_ms:elapsed };
+    if(mode === 'alphabet_session') segment.target = current;
+    else segment.prompt_id = current.id;
+    segments.push(segment);
+    segmentStartedAt = elapsed;
+
+    if(currentIndex >= items().length-1){
+      sessionDurationMs = elapsed;
+      stopTimers();
+      recorder.stop();
+      show(els.advanceBtn,false); show(els.cancelBtn,false);
+      els.timer.textContent='Analyzing';
+      els.status.textContent='Uploading one review clip and analyzing the whole session…';
+      return;
+    }
+
+    currentIndex++;
+    renderPrompt();
   }
+
+  function cancelSession(){
+    stopTimers();
+    segments=[];
+    if(recorder?.state === 'recording') recorder.stop();
+    else resetSessionUi();
+  }
+
+  function resetSessionUi(){
+    analyzing=false; currentIndex=0; segments=[]; chunks=[]; recorder=null;
+    els.timer.textContent='Ready';
+    show(els.advanceBtn,false); show(els.cancelBtn,false);
+    show(els.startBtn,Boolean(stream));
+    els.startBtn.disabled=false;
+    els.startBtn.textContent = mode === 'alphabet_session' ? 'Start A–Z review' : 'Start Unit 1 review';
+    els.modeCard.querySelectorAll('button').forEach(button => button.disabled=false);
+    renderPrompt();
+  }
+
+  async function analyzeSession(){
+    analyzing=true;
+    const blob = new Blob(chunks,{type:recorder?.mimeType || chunks[0]?.type || 'video/webm'});
+    const analysisStart = performance.now();
+    try{
+      const form = new FormData();
+      form.append('mode',mode);
+      form.append('segments',JSON.stringify(segments));
+      form.append('video',blob, mode === 'alphabet_session' ? 'alphabet-review.webm' : 'unit1-review.webm');
+      const response = await fetch('/api/asl-session',{method:'POST',body:form});
+      const data = await response.json().catch(()=>({}));
+      if(response.status===503 && data.code==='AI_NOT_CONFIGURED'){
+        show(els.setup,true);
+        throw new Error('AI recognition is waiting for the Cloudflare API key.');
+      }
+      if(!response.ok) throw new Error(data.error || `Analysis failed (${response.status}).`);
+      const analysisMs = Math.round(performance.now()-analysisStart);
+      renderResults(data,analysisMs);
+      els.status.textContent='Review analyzed in one AI request.';
+    }catch(error){
+      setError(error.message || 'Could not analyze this review.');
+      els.status.textContent='The recording was not scored. You can run the review again.';
+    }finally{
+      analyzing=false;
+      resetSessionUi();
+    }
+  }
+
+  function renderResults(data,analysisMs){
+    show(els.resultCard,true);
+    els.resultEyebrow.textContent = mode === 'alphabet_session' ? 'Alphabet review complete' : 'Unit 1 review complete';
+    els.resultTitle.textContent = mode === 'alphabet_session' ? 'A–Z camera recognition' : 'First Contact camera review';
+    els.confidence.textContent = `${data.overall_confidence ?? 0}%`;
+    els.signing.textContent = `${(sessionDurationMs/1000).toFixed(1)}s`;
+    els.analysis.textContent = `${(analysisMs/1000).toFixed(1)}s`;
+
+    if(mode === 'alphabet_session'){
+      els.accuracy.textContent = `${data.agreement_percent ?? 0}%`;
+      els.accuracyLabel.textContent = 'AI target agreement';
+      els.rows.innerHTML = (data.results || []).map(row => {
+        const recognized = row.recognized_letter || 'UNCLEAR';
+        const badgeClass = recognized === 'UNCLEAR' ? 'unclear' : row.target_match ? 'match' : '';
+        const badgeText = recognized === 'UNCLEAR' ? 'Unclear' : row.target_match ? 'Matched' : `Heard ${recognized}`;
+        return `<div class="row">
+          <div class="row-top"><strong>${row.target}</strong><span class="badge ${badgeClass}">${badgeText}</span></div>
+          <div class="small">Confidence ${row.confidence ?? 0}% · ${(Number(row.duration_ms||0)/1000).toFixed(1)}s${row.note ? ` · ${escapeHtml(row.note)}` : ''}</div>
+        </div>`;
+      }).join('');
+    } else {
+      els.accuracy.textContent = `${data.average_coverage_percent ?? 0}%`;
+      els.accuracyLabel.textContent = 'Prompt concepts noticed';
+      els.rows.innerHTML = (data.results || []).map((row,index) => {
+        const seq = (row.recognized_sequence || []).join(' · ') || 'Unclear';
+        return `<div class="row">
+          <div class="row-top"><strong>Turn ${index+1}: ${escapeHtml(row.prompt_text || '')}</strong><span class="badge">${row.confidence ?? 0}% confidence</span></div>
+          <div class="small">Recognized: ${escapeHtml(seq)}<br>Expected concepts noticed: ${row.coverage_percent ?? 0}% · ${(Number(row.duration_ms||0)/1000).toFixed(1)}s${row.note ? ` · ${escapeHtml(row.note)}` : ''}</div>
+        </div>`;
+      }).join('');
+    }
+
+    const framing = data.framing_quality != null ? ` Framing quality: ${data.framing_quality}%.` : '';
+    els.note.textContent = (data.note || 'These are experimental recognition estimates, not a proficiency grade.') + framing;
+    els.resultCard.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  function escapeHtml(value){
+    return String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  }
+
   function switchMode(nextMode){
-    mode=nextMode;turnIndex=0;results=[];document.querySelectorAll('.mode').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));show(els.summary,false);resetResult();
-    if(stream)setPrompt();else{els.promptLabel.textContent=mode==='alphabet'?'Alphabet prompt':'Unit 1 conversation';els.promptText.textContent=mode==='alphabet'?'Start the camera and we’ll pick a random letter.':'Start the camera to begin the five-turn First Contact conversation.'}
+    if(recorder?.state === 'recording') return;
+    mode=nextMode; currentIndex=0; segments=[]; show(els.resultCard,false); setError('');
+    document.querySelectorAll('.mode').forEach(button => button.classList.toggle('active',button.dataset.mode===mode));
+    els.startBtn.textContent = mode === 'alphabet_session' ? 'Start A–Z review' : 'Start Unit 1 review';
+    els.status.textContent = stream ? 'Camera is ready. Start whenever you are.' : 'This review uses one Gemini request after the entire session is finished.';
+    renderPrompt();
   }
-  document.querySelectorAll('.mode').forEach(b=>b.addEventListener('click',()=>switchMode(b.dataset.mode)));
-  els.cameraBtn.addEventListener('click',startCamera);els.recordBtn.addEventListener('click',()=>recorder?.state==='recording'?stopRecording():record());els.nextBtn.addEventListener('click',next);
-  els.restart.addEventListener('click',()=>{turnIndex=0;results=[];show(els.summary,false);resetResult();setPrompt();window.scrollTo({top:0,behavior:'smooth'})});
-  els.back.addEventListener('click',()=>location.href='/');window.addEventListener('pagehide',()=>stream?.getTracks().forEach(t=>t.stop()));
+
+  document.querySelectorAll('.mode').forEach(button => button.addEventListener('click',()=>switchMode(button.dataset.mode)));
+  els.cameraBtn.addEventListener('click',startCamera);
+  els.startBtn.addEventListener('click',()=>beginSession().catch(error=>setError(error.message||'Could not start recording.')));
+  els.advanceBtn.addEventListener('click',advance);
+  els.cancelBtn.addEventListener('click',cancelSession);
+  els.again.addEventListener('click',()=>{show(els.resultCard,false);setError('');window.scrollTo({top:0,behavior:'smooth'});});
+  els.switchBtn.addEventListener('click',()=>{show(els.resultCard,false);switchMode(mode==='alphabet_session'?'unit1_session':'alphabet_session');window.scrollTo({top:0,behavior:'smooth'});});
+  els.back.addEventListener('click',()=>location.href='/');
+  window.addEventListener('pagehide',()=>stream?.getTracks().forEach(track=>track.stop()));
+  renderPrompt();
 })();
 </script>
 </body>

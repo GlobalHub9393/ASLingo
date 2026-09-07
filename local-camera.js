@@ -1,7 +1,7 @@
 import { HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
-const TEMPLATE_KEY = 'aslingo.localAlphabetTemplates.v1';
+const TEMPLATE_KEY = 'aslingo.localAlphabetCalibration.v2';
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const CALIBRATABLE_LETTERS = new Set(['A','E','M','N','S','T']);
 const DEFAULT_PASS_THRESHOLD = 80;
@@ -37,6 +37,7 @@ const thresholdSelect = document.getElementById('thresholdSelect');
 const holdSelect = document.getElementById('holdSelect');
 const holdProgressEl = document.getElementById('holdProgress');
 const checkerStatus = document.getElementById('checkerStatus');
+const motionHelp = document.getElementById('motionHelp');
 
 let handLandmarker = null;
 let cameraStream = null;
@@ -54,6 +55,11 @@ let checkingActive = false;
 let holdStartedAt = null;
 let holdPeak = 0;
 let cooldownUntil = 0;
+let traceState = null;
+let traceStartHoldAt = null;
+const TRACE_TOLERANCE = 0.062;
+const TRACE_START_HOLD_MS = 260;
+const TRACE_TIMEOUT_MS = 5000;
 
 const clamp = (v,min=0,max=1)=>Math.max(min,Math.min(max,v));
 const dist = (a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
@@ -102,6 +108,7 @@ function featureVector(lm, handed){
 }
 
 function templateSimilarity(letter, vector){
+  if(!CALIBRATABLE_LETTERS.has(letter)) return null;
   const samples=templates[letter]||[];
   if(!samples.length) return null;
   let best=0;
@@ -169,62 +176,251 @@ function fingerPattern(f, pattern){
   return avg(vals.map((v,i)=>state(v,pattern[i])));
 }
 
-function motionStats(letter){
-  const now=performance.now();
-  const frames=motionFrames.filter(f=>now-f.t<1800);
-  if(frames.length<8) return {score:0,path:0,structure:0};
+function motionLetter(letter){
+  return letter==='J' || letter==='Z';
+}
 
-  const idx=letter==='J'?20:8;
-  const raw=frames.map(f=>f.lm[idx]);
-
-  // Smooth the fingertip trace to ignore camera jitter.
-  const pts=raw.map((p,i)=>{
-    const lo=Math.max(0,i-2), hi=Math.min(raw.length,i+3);
-    const slice=raw.slice(lo,hi);
+function traceGuide(letter){
+  if(letter==='J'){
     return {
-      x:avg(slice.map(v=>v.x)),
-      y:avg(slice.map(v=>v.y)),
+      finger:20,
+      label:'Use your pinky tip. Start in the green circle with an I handshape, then trace the J in order.',
+      points:[
+        {x:.50,y:.27},
+        {x:.50,y:.39},
+        {x:.50,y:.52},
+        {x:.51,y:.62},
+        {x:.55,y:.69},
+        {x:.62,y:.72},
+        {x:.69,y:.69},
+      ],
     };
+  }
+  return {
+    finger:8,
+    label:'Use your index fingertip. Start in the green circle, then trace the Z through every checkpoint in order.',
+    points:[
+      {x:.68,y:.29},
+      {x:.56,y:.29},
+      {x:.43,y:.29},
+      {x:.33,y:.29},
+      {x:.44,y:.40},
+      {x:.56,y:.52},
+      {x:.68,y:.64},
+      {x:.56,y:.64},
+      {x:.43,y:.64},
+      {x:.33,y:.64},
+    ],
+  };
+}
+
+function traceDistance(a,b){
+  // y is normalized to frame height, so slightly reduce it when comparing
+  // to x to keep the target radius visually round on a 4:3 camera.
+  return Math.hypot(a.x-b.x,(a.y-b.y)*.78);
+}
+
+function motionStartShapeScore(letter,f){
+  const P=(p)=>fingerPattern(f,p);
+  if(letter==='J') return clamp(P([0,0,0,1])*.88 + (1-f.thumb)*.12);
+  return clamp(P([1,0,0,0])*.88 + f.thumb*.12);
+}
+
+function resetTrace(){
+  traceState=null;
+  traceStartHoldAt=null;
+}
+
+function traceProgress(letter){
+  if(!traceState || traceState.letter!==letter) return 0;
+  const guide=traceGuide(letter);
+  return clamp(traceState.nextIndex/Math.max(1,guide.points.length-1));
+}
+
+function motionStats(letter){
+  const progress=traceProgress(letter);
+  return {score:progress,path:progress,structure:progress};
+}
+
+function drawTraceGuide(letter){
+  if(!motionLetter(letter)) return;
+  const guide=traceGuide(letter);
+  const w=canvas.width,h=canvas.height;
+  const points=guide.points.map(p=>({x:p.x*w,y:p.y*h}));
+  const nextIndex=traceState?.letter===letter ? traceState.nextIndex : 0;
+
+  ctx.save();
+
+  // Stencil path.
+  ctx.lineCap='round';
+  ctx.lineJoin='round';
+  ctx.lineWidth=Math.max(7,w/90);
+  ctx.strokeStyle='rgba(92,151,244,.30)';
+  ctx.setLineDash([Math.max(8,w/70),Math.max(8,w/75)]);
+  ctx.beginPath();
+  ctx.moveTo(points[0].x,points[0].y);
+  for(let i=1;i<points.length;i++) ctx.lineTo(points[i].x,points[i].y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Checkpoints must be reached in order.
+  points.forEach((p,i)=>{
+    const reached=traceState?.letter===letter && i<traceState.nextIndex;
+    const current=i===nextIndex;
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,current?Math.max(12,w/42):Math.max(8,w/58),0,Math.PI*2);
+    if(i===0 && !traceState){
+      ctx.fillStyle='rgba(38,176,103,.85)';
+    }else if(reached){
+      ctx.fillStyle='rgba(38,176,103,.68)';
+    }else if(current){
+      ctx.fillStyle='rgba(45,118,233,.82)';
+    }else{
+      ctx.fillStyle='rgba(255,255,255,.55)';
+    }
+    ctx.fill();
+    ctx.lineWidth=Math.max(2,w/260);
+    ctx.strokeStyle='rgba(255,255,255,.9)';
+    ctx.stroke();
   });
 
-  let path=0;
-  for(let i=1;i<pts.length;i++) path+=dist2(pts[i],pts[i-1]);
+  ctx.restore();
+}
 
-  const pointAt = ratio => pts[Math.min(pts.length-1,Math.max(0,Math.round((pts.length-1)*ratio)))];
-  const vec=(a,b)=>({x:b.x-a.x,y:b.y-a.y});
-  const mag=v=>Math.hypot(v.x,v.y);
-  const cosine=(a,b)=>{
-    const den=mag(a)*mag(b);
-    return den?clamp((a.x*b.x+a.y*b.y)/den,-1,1):1;
-  };
+function updateTrace(letter,e){
+  if(!checkingActive || !latestObservation || !motionLetter(letter)) return false;
 
-  if(letter==='J'){
-    // A real J should look like a stem followed by a hook/turn. Merely waving
-    // the hand now scores poorly.
-    const p0=pointAt(.08), p1=pointAt(.58), p2=pointAt(.92);
-    const stem=vec(p0,p1), hook=vec(p1,p2);
-    const stemVertical=clamp((Math.abs(stem.y)-Math.abs(stem.x)*.75)/.12 + .5);
-    const hookLateral=clamp((Math.abs(hook.x)-.025)/.13);
-    const turn=clamp((.82-cosine(stem,hook))/.95);
-    const enoughPath=clamp((path-.08)/.28);
-    const structure=clamp(stemVertical*.34+hookLateral*.27+turn*.29+enoughPath*.10);
-    return {score:structure,path,structure};
+  const guide=traceGuide(letter);
+  const finger=latestObservation.lm?.[guide.finger];
+  if(!finger) return false;
+
+  motionHelp.classList.remove('hidden');
+  motionHelp.innerHTML=`<b>${letter} trace</b> · ${guide.label}`;
+
+  const startShape=motionStartShapeScore(letter,latestObservation.features);
+  const now=performance.now();
+
+  // Before the trace begins, require the correct starting handshape AND
+  // the correct fingertip to sit in the start circle briefly.
+  if(!traceState || traceState.letter!==letter){
+    const start=guide.points[0];
+    const inStart=traceDistance(finger,start)<=TRACE_TOLERANCE;
+
+    if(startShape<.70){
+      traceStartHoldAt=null;
+      checkerStatus.className='checker-status wait';
+      checkerStatus.textContent=letter==='J'
+        ? 'Make a clear I handshape first, then place your pinky in the green start circle.'
+        : 'Point your index finger first, then place the fingertip in the green start circle.';
+      return true;
+    }
+
+    if(!inStart){
+      traceStartHoldAt=null;
+      checkerStatus.className='checker-status wait';
+      checkerStatus.textContent='Move the highlighted fingertip into the green start circle.';
+      return true;
+    }
+
+    if(traceStartHoldAt==null) traceStartHoldAt=now;
+    const startHold=clamp((now-traceStartHoldAt)/TRACE_START_HOLD_MS);
+    holdProgressEl.style.width=`${Math.round(startHold*100)}%`;
+    checkerStatus.className='checker-status pass';
+    checkerStatus.textContent=`Starting ${letter} trace…`;
+
+    if(startHold<1) return true;
+
+    traceState={
+      letter,
+      nextIndex:1,
+      startedAt:now,
+      hitDistances:[traceDistance(finger,start)],
+      startShape,
+    };
+    traceStartHoldAt=null;
+    holdProgressEl.style.width='0%';
+    checkerStatus.textContent=`Trace ${letter} through the blue checkpoints.`;
+    return true;
   }
 
-  // Z should have three strokes: horizontal-ish, diagonal back across, then
-  // horizontal-ish again. Mirroring is accepted, but random motion is not.
-  const p0=pointAt(.05), p1=pointAt(.32), p2=pointAt(.68), p3=pointAt(.95);
-  const a=vec(p0,p1), b=vec(p1,p2), c=vec(p2,p3);
-  const horiz=v=>clamp((Math.abs(v.x)-Math.abs(v.y)*.65)/.13 + .45);
-  const diagonal=clamp((Math.min(Math.abs(b.x),Math.abs(b.y))-.025)/.13);
-  const sameOuterDir = Math.sign(a.x)===Math.sign(c.x) ? 1 : 0;
-  const middleBack = Math.sign(a.x)!==Math.sign(b.x) ? 1 : 0;
-  const enoughPath=clamp((path-.10)/.34);
-  const structure=clamp(
-    horiz(a)*.22 + horiz(c)*.22 + diagonal*.24 +
-    sameOuterDir*.12 + middleBack*.12 + enoughPath*.08
-  );
-  return {score:structure,path,structure};
+  // Keep the correct handshape during the motion.
+  if(startShape<.48){
+    resetTrace();
+    holdProgressEl.style.width='0%';
+    checkerStatus.className='checker-status wait';
+    checkerStatus.textContent=letter==='J'
+      ? 'Keep the I handshape while tracing J. Start again in the green circle.'
+      : 'Keep the index-pointing handshape while tracing Z. Start again.';
+    return true;
+  }
+
+  if(now-traceState.startedAt>TRACE_TIMEOUT_MS){
+    resetTrace();
+    holdProgressEl.style.width='0%';
+    checkerStatus.className='checker-status wait';
+    checkerStatus.textContent=`Trace timed out. Return to the green start circle and try ${letter} again.`;
+    return true;
+  }
+
+  const target=guide.points[traceState.nextIndex];
+  const d=traceDistance(finger,target);
+
+  if(d<=TRACE_TOLERANCE){
+    traceState.hitDistances.push(d);
+    traceState.nextIndex++;
+    const progress=traceProgress(letter);
+    holdProgressEl.style.width=`${Math.round(progress*100)}%`;
+
+    if(traceState.nextIndex>=guide.points.length){
+      const avgDistance=avg(traceState.hitDistances);
+      const pathAccuracy=clamp(1-avgDistance/TRACE_TOLERANCE);
+      const motionConfidence=Math.round(84+pathAccuracy*16);
+      const shapeConfidence=Math.round(traceState.startShape*100);
+      const confidence=Math.round(shapeConfidence*.34+motionConfidence*.66);
+
+      results[letter]={
+        confidence,
+        shape:shapeConfidence,
+        motion:motionConfidence,
+        personal:null,
+        autoPassed:true,
+        tracePassed:true,
+      };
+
+      checkerStatus.className='checker-status pass';
+      checkerStatus.textContent=`✓ ${letter} trace accepted`;
+      holdProgressEl.style.width='100%';
+      resetTrace();
+
+      if(currentIndex===LETTERS.length-1){
+        checkingActive=false;
+        checkButton.textContent='Start checking';
+        setTimeout(showResults,500);
+      }else{
+        currentIndex++;
+        motionFrames=[];
+        latestObservation=null;
+        cooldownUntil=performance.now()+520;
+        setTimeout(()=>{
+          holdProgressEl.style.width='0%';
+          checkerStatus.className='checker-status';
+          checkerStatus.textContent=`Now sign ${LETTERS[currentIndex]}.`;
+          updateUI();
+        },430);
+      }
+      return true;
+    }
+
+    checkerStatus.className='checker-status pass';
+    checkerStatus.textContent=`Good — checkpoint ${traceState.nextIndex}/${guide.points.length-1}`;
+  }else{
+    const progress=traceProgress(letter);
+    holdProgressEl.style.width=`${Math.round(progress*100)}%`;
+    checkerStatus.className='checker-status wait';
+    checkerStatus.textContent=`Follow the stencil to the next blue checkpoint.`;
+  }
+
+  return true;
 }
 
 function ruleScore(letter,f){
@@ -245,7 +441,7 @@ function ruleScore(letter,f){
     case 'G': return .48*P([1,0,0,0])+.27*f.thumb+.25*f.horizontal;
     case 'H': return .52*P([1,1,0,0])+.25*togetherIM+.23*f.horizontal;
     case 'I': return .78*P([0,0,0,1])+.22*(1-f.thumb);
-    case 'J': { const m=motionStats('J'); return .55*P([0,0,0,1])+.45*m.score; }
+    case 'J': return motionStartShapeScore('J',f);
     case 'K': return .54*P([1,1,0,0])+.25*spreadIM+.21*f.thumb;
     case 'L': return .66*P([1,0,0,0])+.34*f.thumb;
     case 'M': return .76*fist+.24*closeness(f.thumbMiddle,.48,.4);
@@ -261,7 +457,7 @@ function ruleScore(letter,f){
     case 'W': return .76*P([1,1,1,0])+.24*avg([spreadIM,clamp((f.middleRing-.15)/.4)]);
     case 'X': return .52*closeness(f.index,.38,.38)+.38*P([0,0,0,0])+.10*(1-f.thumb);
     case 'Y': return .72*P([0,0,0,1])+.28*f.thumb;
-    case 'Z': { const m=motionStats('Z'); return .55*P([1,0,0,0])+.45*m.score; }
+    case 'Z': return motionStartShapeScore('Z',f);
     default:return 0;
   }
 }
@@ -270,41 +466,39 @@ function evaluate(letter, f){
   const rule=clamp(ruleScore(letter,f));
   const personal=templateSimilarity(letter,f.vector);
 
-  // Calibration can make a small correction for hand proportions, but it cannot
-  // rescue a weak generic handshape score on its own.
   const personalAdjusted = personal == null
     ? rule
     : clamp(rule*.84 + personal*.16);
 
-  const motion = (letter==='J'||letter==='Z') ? motionStats(letter).score : 1;
-  const shape = personalAdjusted;
-
-  // J/Z are motion-gated. If the path is wrong, confidence cannot pass even if
-  // the static starting handshape looks right.
-  const confidence = (letter==='J'||letter==='Z')
-    ? clamp(shape*.58 + motion*.42) * (motion < .52 ? .72 : 1)
-    : shape;
+  if(motionLetter(letter)){
+    const progress=traceProgress(letter);
+    return {
+      confidence:Math.round(clamp(personalAdjusted*.58 + progress*.42)*100),
+      shape:Math.round(personalAdjusted*100),
+      motion:Math.round(progress*100),
+      personal:null,
+    };
+  }
 
   return {
-    confidence:Math.round(clamp(confidence)*100),
-    shape:Math.round(shape*100),
-    motion:Math.round(motion*100),
+    confidence:Math.round(clamp(personalAdjusted)*100),
+    shape:Math.round(personalAdjusted*100),
+    motion:100,
     personal:personal==null?null:Math.round(personal*100),
   };
 }
 
 function feedbackFor(letter,e){
+  if(motionLetter(letter)){
+    return ['', `${letter} uses tracing mode. Match the starting handshape, then follow the stencil with the highlighted fingertip.`];
+  }
   if(e.confidence>=85) return ['good', `Strong match for ${letter}. Hold it steady to advance.`];
   if(e.confidence>=75) return ['warn', `Close. Keep ${letter} steady and let the confidence settle.`];
-  if((letter==='J'||letter==='Z') && e.motion<52) {
-    return ['', `${letter} needs the expected path shape. Random movement will not count.`];
-  }
   if(CALIBRATABLE_LETTERS.has(letter)) {
     return ['', `${letter} is a subtle handshape. If the generic check consistently misses a correct sign, you can calibrate your hand once.`];
   }
   return ['', `Not confident yet. Check finger extension, thumb placement, and palm orientation.`];
 }
-
 
 function resetHold(message=null){
   holdStartedAt=null;
@@ -319,19 +513,24 @@ function resetHold(message=null){
 function autoCheck(letter,e){
   if(!checkingActive || teaching || performance.now()<cooldownUntil) return;
 
+  if(motionLetter(letter)){
+    updateTrace(letter,e);
+    return;
+  }
+
+  motionHelp.classList.add('hidden');
+  resetTrace();
+
   const threshold=Number(thresholdSelect.value||DEFAULT_PASS_THRESHOLD);
   const holdMs=Number(holdSelect.value||DEFAULT_HOLD_MS);
   const trackingOk=(latestObservation?.tracking||0)>=60;
-  const motionOk=!['J','Z'].includes(letter) || e.motion>=55;
-  const passing=e.confidence>=threshold && trackingOk && motionOk;
+  const passing=e.confidence>=threshold && trackingOk;
 
   if(!passing){
     resetHold(
       !trackingOk
         ? 'Keep your full signing hand visible.'
-        : ['J','Z'].includes(letter) && !motionOk
-          ? `${letter}: waiting for the correct motion path…`
-          : `Get ${letter} to ${threshold}% and keep it there.`
+        : `Get ${letter} to ${threshold}% and keep it there.`
     );
     return;
   }
@@ -382,6 +581,8 @@ function autoCheck(letter,e){
 
 function toggleChecking(){
   checkingActive=!checkingActive;
+  resetTrace();
+  motionHelp.classList.toggle('hidden', !checkingActive || !motionLetter(LETTERS[currentIndex]));
   holdStartedAt=null;
   holdPeak=0;
   holdProgressEl.style.width='0%';
@@ -395,6 +596,8 @@ function toggleChecking(){
 function drawHand(lm){
   const w=canvas.width,h=canvas.height;
   ctx.clearRect(0,0,w,h);
+  const letter=LETTERS[currentIndex];
+  if(motionLetter(letter)) drawTraceGuide(letter);
   if(!lm) return;
   const conns=HandLandmarker.HAND_CONNECTIONS || [];
   ctx.lineWidth=Math.max(2,w/260);
@@ -434,7 +637,7 @@ function updateUI(){
   scoreValue.textContent=`${e.confidence}%`;
   scoreLabel.textContent=e.confidence>=82?'Strong match':e.confidence>=64?'Possible match':'Keep adjusting';
   shapeScoreEl.textContent=`${e.shape}%`;
-  motionScoreEl.textContent=(letter==='J'||letter==='Z')?`${e.motion}%`:'N/A';
+  motionScoreEl.textContent=motionLetter(letter)?`${e.motion}% trace`:'N/A';
   trackingScoreEl.textContent=`${latestObservation.tracking}%`;
   const [klass,text]=feedbackFor(letter,e);
   feedback.className=`feedback ${klass}`;
@@ -451,7 +654,7 @@ function renderGrid(){
     const r=results[letter];
     if(r)b.classList.add(r.confidence>=70?'done':'low');
     b.textContent=letter;
-    b.onclick=()=>{captureCurrent();currentIndex=i;motionFrames=[];updateUI();};
+    b.onclick=()=>{captureCurrent();resetHold();resetTrace();currentIndex=i;motionFrames=[];latestObservation=null;drawHand(null);updateUI();};
     alphabetGrid.appendChild(b);
   });
 }
@@ -465,6 +668,7 @@ function captureCurrent(){
 function next(){
   captureCurrent();
   resetHold();
+  resetTrace();
   if(currentIndex===LETTERS.length-1){showResults();return;}
   currentIndex++;
   motionFrames=[];
@@ -475,6 +679,7 @@ function next(){
 function previous(){
   captureCurrent();
   resetHold();
+  resetTrace();
   currentIndex=Math.max(0,currentIndex-1);
   motionFrames=[];
   latestObservation=null;
@@ -623,7 +828,7 @@ function showResults(){
     LETTERS.filter(l=>results[l]).map(l=>results[l].confidence).reduce((a,b)=>a+b,0)/attempted
   ):0;
   const strong=LETTERS.filter(l=>results[l]?.autoPassed).length;
-  const templateCount=Object.keys(templates).filter(letter=>templates[letter]?.length).length;
+  const templateCount=[...CALIBRATABLE_LETTERS].filter(letter=>templates[letter]?.length).length;
   document.getElementById('resultAverage').textContent=`${average}%`;
   document.getElementById('resultStrong').textContent=`${strong}/${attempted || LETTERS.length}`;
   document.getElementById('resultTemplates').textContent=templateCount;
@@ -636,7 +841,7 @@ function showResults(){
     row.innerHTML=`<div class="result-letter">${letter}</div>
       <div><b>${r.confidence||0}% confidence</b>
       <div class="result-bar"><span style="width:${r.confidence||0}%"></span></div></div>
-      <small>${r.personal!=null?'personalized':'rule check'}</small>`;
+      <small>${r.tracePassed?'trace check':r.personal!=null?'calibrated':'rule check'}</small>`;
     rows.appendChild(row);
   });
 }
@@ -646,6 +851,8 @@ function restart(){
   currentIndex=0;
   motionFrames=[];
   latestObservation=null;
+  resetTrace();
+  motionHelp.classList.add('hidden');
   checkingActive=false;
   holdStartedAt=null;
   holdPeak=0;

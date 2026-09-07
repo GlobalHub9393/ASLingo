@@ -35,8 +35,7 @@
       <p class="fineprint">
         Beta note: this is a constrained target checker, not a general ASL
         interpreter. Start Checking will automatically advance only after a letter
-        stays above your confidence threshold for the selected hold time. J and Z
-        require the expected motion pattern, not just movement.
+        stays above your confidence threshold for the selected hold time. J and Z use an on-screen tracing guide: pinky tip for J, index tip for Z.
       </p>
     </section>
 
@@ -93,6 +92,8 @@
         Keep your signing hand visible from the wrist through the fingertips.
       </div>
 
+      <div class="motion-help hidden" id="motionHelp"></div>
+
       <div class="confidence-strip">
         <div>
           <span>Shape match</span>
@@ -129,7 +130,7 @@
       <div class="results-summary">
         <div><b id="resultAverage">—</b><span>average confidence</span></div>
         <div><b id="resultStrong">—</b><span>strong matches</span></div>
-        <div><b id="resultTemplates">—</b><span>personal templates</span></div>
+        <div><b id="resultTemplates">—</b><span>hand calibrations</span></div>
       </div>
       <div id="resultRows"></div>
       <button class="primary" id="restartButton">Try A–Z again</button>

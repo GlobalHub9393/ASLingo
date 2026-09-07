@@ -14,3 +14,7 @@
   .checker-controls{align-items:stretch;flex-direction:column}
   .checker-start{width:100%}
 }
+
+.motion-help{margin:8px 0 4px;padding:11px 13px;border-radius:14px;background:#eef5ff;color:#315f96;font-size:12px;line-height:1.45}
+.motion-help b{color:#1f4f87}
+.trace-guide{pointer-events:none}

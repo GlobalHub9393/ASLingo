@@ -132,6 +132,7 @@ function SignedInApp({ session }) {
   const [activeLesson, setActiveLesson] = useState(null);
   const [activeSign, setActiveSign] = useState(null);
   const [practiceOpen, setPracticeOpen] = useState(false);
+  const [studyQuizOpen, setStudyQuizOpen] = useState(false);
   const [catalog, setCatalog] = useState(null);
   const [catalogError, setCatalogError] = useState('');
   const catalogPromise = useRef(null);
@@ -253,8 +254,7 @@ function SignedInApp({ session }) {
     return score;
   }
 
-  async function finishCourseLesson(lesson, score, quizAnswers) {
-    await saveLessonProgress(lesson, score);
+  async function saveSignQuizAnswers(quizAnswers) {
     const grouped=new Map();
     quizAnswers.forEach(a=>{
       if(!a.sign?.id)return;
@@ -280,6 +280,18 @@ function SignedInApp({ session }) {
     if(!res.error) setDictionaryState(prev=>{
       const m=new Map(prev.map(r=>[r.signbank_id,r])); (res.data||rows).forEach(r=>m.set(r.signbank_id,r)); return [...m.values()];
     });
+  }
+
+  async function finishCourseLesson(lesson, score, quizAnswers) {
+    await saveLessonProgress(lesson, score);
+    await saveSignQuizAnswers(quizAnswers);
+  }
+
+  async function finishStudyQuiz({signAnswers=[],letterAnswers=[]}) {
+    await Promise.all([
+      signAnswers.length ? saveSignQuizAnswers(signAnswers) : Promise.resolve(),
+      letterAnswers.length ? saveLetterAnswers(letterAnswers) : Promise.resolve(),
+    ]);
   }
 
   async function recordSignView(sign) {
@@ -317,6 +329,21 @@ function SignedInApp({ session }) {
 
   const blueprintMap=useMemo(()=>new Map(blueprints.map(b=>[b.lesson_slug,b])),[blueprints]);
   const completedSet=useMemo(()=>new Set(lessonProgress.filter(r=>r.completed).map(r=>r.lesson_slug)),[lessonProgress]);
+  const studiedCourseRefs=useMemo(()=>{
+    const refs=[];
+    blueprints.forEach(bp=>{
+      if(!completedSet.has(bp.lesson_slug))return;
+      const lesson=lessons.find(l=>l.slug===bp.lesson_slug);
+      if(!lesson || lesson.lesson_type==='alphabet')return;
+      (bp.sign_keys||[]).forEach(key=>refs.push({key,lessonSlug:bp.lesson_slug}));
+    });
+    return refs;
+  },[blueprints,completedSet,lessons]);
+  const studiedLetters=useMemo(()=>{
+    const alphabetSlugs=new Set(lessons.filter(l=>l.lesson_type==='alphabet'&&completedSet.has(l.slug)).map(l=>l.slug));
+    const keys=new Set(lessonItems.filter(i=>alphabetSlugs.has(i.lesson_slug)).map(i=>i.ref_key));
+    return letters.filter(l=>keys.has(l.letter));
+  },[letters,lessonItems,lessons,completedSet]);
   const nextLesson=lessons.find(l=>!completedSet.has(l.slug)) || lessons.at(-1);
   const masteredLetters=letterProgress.filter(r=>r.status==='mastered').length;
 
@@ -329,8 +356,9 @@ function SignedInApp({ session }) {
       <div className="app-content">
         {tab==='home'&&<HomeTab user={user} units={units} lessons={lessons} completedSet={completedSet}
           nextLesson={nextLesson} masteredLetters={masteredLetters} dictionaryState={dictionaryState}
+          studiedCount={studiedCourseRefs.length+studiedLetters.length}
           onContinue={()=>nextLesson&&setActiveLesson(nextLesson)} onPractice={()=>setPracticeOpen(true)}
-          onDictionary={()=>setTab('dictionary')} onLearn={()=>setTab('learn')} />}
+          onStudyQuiz={()=>setStudyQuizOpen(true)} onDictionary={()=>setTab('dictionary')} onLearn={()=>setTab('learn')} />}
         {tab==='learn'&&<LearnTab units={units} lessons={lessons} progress={lessonProgress}
           blueprintMap={blueprintMap} onStart={setActiveLesson}/>}
         {tab==='dictionary'&&<DictionaryTab categories={categories} catalog={catalog} catalogError={catalogError}
@@ -348,6 +376,8 @@ function SignedInApp({ session }) {
 
       {practiceOpen&&<AlphabetPractice letters={letters} progress={letterProgress}
         onClose={()=>setPracticeOpen(false)} onFinish={saveLetterAnswers}/>}
+      {studyQuizOpen&&<StudyQuiz courseRefs={studiedCourseRefs} letters={studiedLetters}
+        onClose={()=>setStudyQuizOpen(false)} onFinish={finishStudyQuiz}/>}
       {activeSign&&<SignDetail sign={activeSign}
         favorite={Boolean(dictionaryState.find(r=>r.signbank_id===activeSign.id)?.favorite)}
         onFavorite={()=>toggleFavorite(activeSign)} onClose={()=>setActiveSign(null)}/>}
@@ -383,7 +413,7 @@ function PlacementQuiz({letters,name,onComplete}) {
   </section></main>;
 }
 
-function HomeTab({user,units,lessons,completedSet,nextLesson,masteredLetters,dictionaryState,onContinue,onPractice,onDictionary,onLearn}) {
+function HomeTab({user,units,lessons,completedSet,nextLesson,masteredLetters,dictionaryState,studiedCount,onContinue,onPractice,onStudyQuiz,onDictionary,onLearn}) {
   const completed=completedSet.size;
   const total=lessons.length;
   const pct=Math.round(completed/Math.max(total,1)*100);
@@ -403,6 +433,7 @@ function HomeTab({user,units,lessons,completedSet,nextLesson,masteredLetters,dic
       <div className="stat-card"><strong>{dictionaryState.filter(r=>r.favorite).length}</strong><span>Saved signs</span></div>
     </div>
     <h3 className="section-title">Jump back in</h3>
+    <button className="menu-card study-quiz-card" onClick={onStudyQuiz}><Sparkles/><span><b>Quiz what I've studied</b><small>{studiedCount ? `${studiedCount} studied items · completed lessons only` : 'Complete a lesson to build your quiz'}</small></span><ChevronRight/></button>
     <button className="menu-card" onClick={onLearn}><GraduationCap/><span><b>Full course</b><small>{units.length} units · {total} lessons</small></span><ChevronRight/></button>
     <button className="menu-card" onClick={onPractice}><RotateCcw/><span><b>Alphabet practice</b><small>Review weak letters</small></span><ChevronRight/></button>
     <button className="menu-card" onClick={onDictionary}><LibraryBig/><span><b>Dictionary</b><small>Search the full Signbank catalog</small></span><ChevronRight/></button>
@@ -631,6 +662,108 @@ function AlphabetPractice({letters,progress,onClose,onFinish}) {
 function LetterVisual({letter}) {
   if(letter.image_url)return <div className="letter-visual"><img src={letter.image_url} alt={`ASL letter ${letter.letter}`}/></div>;
   return <div className="letter-visual placeholder"><span>{letter.letter}</span></div>;
+}
+
+
+function StudyQuiz({courseRefs,letters,onClose,onFinish}) {
+  const [phase,setPhase]=useState('loading');
+  const [signPool,setSignPool]=useState([]);
+  const [questions,setQuestions]=useState([]);
+  const [index,setIndex]=useState(0);
+  const [selected,setSelected]=useState(null);
+  const [answers,setAnswers]=useState([]);
+  const [score,setScore]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+
+  useEffect(()=>{ buildQuiz(); },[]);
+
+  async function buildQuiz(){
+    setPhase('loading'); setError(''); setSelected(null); setAnswers([]); setIndex(0); setScore(null);
+    try{
+      const refs=shuffle(courseRefs).slice(0,Math.min(courseRefs.length,60));
+      const settled=await Promise.all(refs.map(async ref=>{
+        try{return {key:ref.key,sign:await resolveCourseSign(ref.key,ref.lessonSlug)}}catch{return null}
+      }));
+      const byId=new Map();
+      settled.filter(x=>x?.sign?.id).forEach(x=>{
+        if(!byId.has(x.sign.id))byId.set(x.sign.id,x);
+      });
+      const signs=[...byId.values()]; setSignPool(signs);
+
+      const q=[];
+      if(signs.length>=4){
+        const count=Math.min(8,signs.length);
+        shuffle(signs).slice(0,count).forEach(target=>{
+          const choices=shuffle([target,...shuffle(signs.filter(x=>x.sign.id!==target.sign.id)).slice(0,3)]);
+          q.push({type:'sign',target,choices});
+        });
+      }
+      if(letters.length>=4){
+        const room=Math.max(0,10-q.length);
+        const count=Math.min(room, letters.length);
+        shuffle(letters).slice(0,count).forEach(target=>{
+          const choices=shuffle([target,...shuffle(letters.filter(x=>x.letter!==target.letter)).slice(0,3)]);
+          q.push({type:'letter',target,choices});
+        });
+      }
+      const final=shuffle(q).slice(0,10);
+      setQuestions(final);
+      setPhase(final.length?'quiz':'empty');
+    }catch(e){setError(errorText(e,'Could not build your study quiz.'));setPhase('empty')}
+  }
+
+  const q=questions[index];
+  function choose(value){
+    if(selected!=null)return;
+    setSelected(value);
+    if(q.type==='sign')setAnswers(a=>[...a,{type:'sign',sign:q.target.sign,correct:value===q.target.sign.id}]);
+    else setAnswers(a=>[...a,{type:'letter',letter:q.target.letter,correct:value===q.target.letter}]);
+  }
+
+  async function next(){
+    if(selected==null)return;
+    if(index<questions.length-1){setIndex(i=>i+1);setSelected(null);return}
+    setBusy(true);
+    const finalAnswers=answers;
+    const s=Math.round(finalAnswers.filter(a=>a.correct).length/Math.max(finalAnswers.length,1)*100);
+    try{
+      await onFinish({
+        signAnswers:finalAnswers.filter(a=>a.type==='sign').map(a=>({sign:a.sign,correct:a.correct})),
+        letterAnswers:finalAnswers.filter(a=>a.type==='letter').map(a=>({letter:a.letter,correct:a.correct})),
+      });
+      setScore(s); setPhase('done');
+    }catch(e){setError(errorText(e,'Could not save quiz results.'))}
+    finally{setBusy(false)}
+  }
+
+  return <div className="modal-screen">
+    <div className="modal-bar"><button onClick={onClose}><X/></button><div><b>Study Quiz</b><small>Completed lessons only</small></div><span/></div>
+    <div className="lesson-stage">
+      {phase==='loading'&&<div className="study-loading"><LoaderCircle className="spin"/><h2>Building your quiz…</h2><p>Only signs and letters from lessons you've completed are eligible.</p></div>}
+      {phase==='empty'&&<div className="note-card"><p className="eyebrow">Nothing unseen</p><h2>Your quiz grows with you.</h2><p>Complete a lesson with at least four usable signs or four alphabet letters first. ASLingo will never use an unstudied sign as a question or distractor.</p>{error&&<div className="error-banner">{error}</div>}<button className="primary-button" onClick={onClose}>Back to course</button></div>}
+      {phase==='quiz'&&q&&<div className="quiz-card in-modal">
+        <div className="progress-line"><span style={{width:`${index/questions.length*100}%`}}/></div>
+        <div className="studied-only-badge"><Check size={14}/> Studied material only</div>
+        <p className="eyebrow">Question {index+1} of {questions.length}</p>
+        {q.type==='sign'?<>
+          <h2>What does this sign mean?</h2><SignVideo sign={q.target.sign} compact/>
+          <div className="answer-list">{q.choices.map(c=>{
+            const picked=selected===c.sign.id, correct=c.sign.id===q.target.sign.id;
+            return <button key={c.sign.id} disabled={selected!=null} className={cx('answer-choice',selected!=null&&correct&&'correct',picked&&!correct&&'wrong')} onClick={()=>choose(c.sign.id)}>{c.key}{selected!=null&&correct&&<Check size={18}/>}</button>
+          })}</div>
+        </>:<>
+          <h2>Which letter is this?</h2><LetterVisual letter={q.target}/>
+          <div className="choice-grid">{q.choices.map(c=>{
+            const picked=selected===c.letter,correct=c.letter===q.target.letter;
+            return <button key={c.letter} disabled={selected!=null} className={cx('choice',selected!=null&&correct&&'correct',picked&&!correct&&'wrong')} onClick={()=>choose(c.letter)}>{c.letter}</button>
+          })}</div>
+        </>}
+        {selected!=null&&<button className="primary-button" disabled={busy} onClick={next}>{index===questions.length-1?(busy?'Saving…':'Finish quiz'):'Next question'}</button>}
+      </div>}
+      {phase==='done'&&<div className="result-card"><div className="result-ring">{score}%</div><p className="eyebrow">Cumulative review</p><h1>{score>=90?'You know this set.':score>=75?'Solid review.':'Worth another pass.'}</h1><p>Every question and every wrong-answer choice came only from lessons you've already completed.</p><button className="primary-button" onClick={buildQuiz}>Quiz me again</button><button className="secondary-button study-close-button" onClick={onClose}>Done</button></div>}
+    </div>
+  </div>;
 }
 
 function DictionaryTab({categories,catalog,catalogError,ensureCatalog,dictionaryState,onOpen}) {

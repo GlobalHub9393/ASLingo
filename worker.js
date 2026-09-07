@@ -521,7 +521,7 @@ async function callGeminiForAsl({ env, bytes, mimeType, mode, promptText }) {
     },
   });
 
-  const models = ['gemini-2.5-flash-lite', 'gemini-3.5-flash-lite'];
+  const models = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
   let payload = {};
   let upstream = null;
 
@@ -539,16 +539,21 @@ async function callGeminiForAsl({ env, bytes, mimeType, mode, promptText }) {
     payload = await upstream.json().catch(() => ({}));
     if (upstream.ok) break;
 
+    const upstreamMessage = payload?.error?.message || payload?.message || '';
     const isRateLimit = upstream.status === 429 ||
-      /quota|rate.?limit|resource_exhausted/i.test(payload?.error?.message || payload?.message || '');
+      /quota|rate.?limit|resource_exhausted/i.test(upstreamMessage);
+    const isModelUnavailable = upstream.status === 404 ||
+      /no longer available|not available to new users|model.*(?:unavailable|unsupported|not found)|unsupported model/i.test(upstreamMessage);
+    const canTryNext = i < models.length - 1 && (isRateLimit || isModelUnavailable);
 
-    if (!isRateLimit || i === models.length - 1) {
-      if (isRateLimit) {
-        throw new Error('Camera AI is temporarily rate-limited. Wait about a minute, then try again.');
-      }
-      const upstreamMessage = payload?.error?.message || payload?.message || `Gemini returned ${upstream.status}`;
-      throw new Error(upstreamMessage);
+    if (canTryNext) continue;
+    if (isRateLimit) {
+      throw new Error('Camera AI is temporarily rate-limited. Wait about a minute, then try again.');
     }
+    if (isModelUnavailable) {
+      throw new Error('Camera AI model is temporarily unavailable. Try again shortly.');
+    }
+    throw new Error(upstreamMessage || `Gemini returned ${upstream.status}`);
   }
 
   const outputText = extractInteractionText(payload);
@@ -690,7 +695,7 @@ async function callGeminiForAslSession({ env, bytes, mimeType, mode, segments })
     },
   });
 
-  const models = ['gemini-2.5-flash-lite', 'gemini-3.5-flash-lite'];
+  const models = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
   let payload = {};
   let upstream = null;
 
@@ -710,10 +715,14 @@ async function callGeminiForAslSession({ env, bytes, mimeType, mode, segments })
 
     const message = payload?.error?.message || payload?.message || '';
     const isRateLimit = upstream.status === 429 || /quota|rate.?limit|resource_exhausted/i.test(message);
-    if (!isRateLimit || i === models.length - 1) {
-      if (isRateLimit) throw new Error('Camera AI is temporarily rate-limited. Wait about a minute, then try again.');
-      throw new Error(message || `Gemini returned ${upstream.status}`);
-    }
+    const isModelUnavailable = upstream.status === 404 ||
+      /no longer available|not available to new users|model.*(?:unavailable|unsupported|not found)|unsupported model/i.test(message);
+    const canTryNext = i < models.length - 1 && (isRateLimit || isModelUnavailable);
+
+    if (canTryNext) continue;
+    if (isRateLimit) throw new Error('Camera AI is temporarily rate-limited. Wait about a minute, then try again.');
+    if (isModelUnavailable) throw new Error('Camera AI model is temporarily unavailable. Try again shortly.');
+    throw new Error(message || `Gemini returned ${upstream.status}`);
   }
 
   const outputText = extractInteractionText(payload);

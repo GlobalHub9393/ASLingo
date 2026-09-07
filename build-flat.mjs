@@ -7,6 +7,7 @@ for (const file of [
   'apple-touch-icon.png',
   'icon-192.png',
   'icon-512.png',
+  'camera.html',
 ]) {
   await copyFile(file, `dist/${file}`);
 }

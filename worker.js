@@ -391,14 +391,222 @@ async function videoStreamResponse(request) {
   }
 }
 
+
+const UNIT1_CAMERA_VOCAB = [
+  'hello','hi','me','you','my','your','name','what',
+  'deaf','hearing','asl','sign','language','learn','know','understand',
+  'please','thank you','sorry','again','slow','help','wait','ready',
+  'nice','meet','where','from','live','yes','no','okay'
+];
+
+const CAMERA_CONVERSATION_PROMPTS = {
+  'intro-name': {
+    text: 'Say hello and tell me your name.',
+    expected: ['hello','my','name'],
+  },
+  'ask-name': {
+    text: 'Ask the other person their name.',
+    expected: ['your','name','what'],
+  },
+  'nice-meet': {
+    text: 'Say that it is nice to meet them.',
+    expected: ['nice','meet','you'],
+  },
+  'where-from': {
+    text: 'Ask where the other person is from.',
+    expected: ['you','where','from'],
+  },
+  'repair': {
+    text: 'Ask them to please sign again slowly.',
+    expected: ['please','again','slow'],
+  },
+};
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  const chunk = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function extractInteractionText(payload) {
+  if (typeof payload?.output_text === 'string') return payload.output_text;
+  for (const step of payload?.steps || []) {
+    for (const content of step?.content || []) {
+      if (content?.type === 'text' && typeof content.text === 'string') return content.text;
+    }
+  }
+  return null;
+}
+
+function normalizeCameraToken(value = '') {
+  return normalizeEnglish(value).replace(/^i$/, 'me').replace(/^ok$/, 'okay');
+}
+
+async function callGeminiForAsl({ env, bytes, mimeType, mode, promptText }) {
+  const base64 = arrayBufferToBase64(bytes);
+  let textPrompt;
+  let schema;
+
+  if (mode === 'alphabet') {
+    const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    textPrompt = [
+      'You are an experimental ASL fingerspelling practice recognizer.',
+      'Analyze only what is visibly signed in the short camera clip. Do not assume the learner matched a hidden target.',
+      'Identify the single fingerspelled ASL letter from A through Z. Use UNCLEAR if the handshape or movement is not clear enough.',
+      'Pay attention to handshape, thumb placement, palm orientation, and movement, especially J and Z.',
+      'Confidence is your confidence in the visual recognition, not a grade of the learner.',
+      'Give a very short note only when framing or ambiguity matters.'
+    ].join(' ');
+    schema = {
+      type: 'object',
+      properties: {
+        recognized_letter: { type: 'string', enum: [...letters, 'UNCLEAR'] },
+        overall_confidence: { type: 'integer', minimum: 0, maximum: 100 },
+        framing_quality: { type: 'integer', minimum: 0, maximum: 100 },
+        note: { type: 'string' },
+      },
+      required: ['recognized_letter','overall_confidence','framing_quality','note'],
+    };
+  } else {
+    textPrompt = [
+      'You are an experimental, constrained ASL practice recognizer.',
+      `The learner was given this practice prompt: "${promptText}"`,
+      `The ONLY vocabulary you may report is: ${UNIT1_CAMERA_VOCAB.join(', ')}.`,
+      'Report only signs you can actually see in the video; do not fill in words merely because the prompt suggests them.',
+      'The signer may use ASL word order rather than English word order. Do not penalize different order.',
+      'Ignore any personal-name fingerspelling that is not confidently readable rather than inventing a name.',
+      'Use handshape, movement, location, orientation, body position, and visible nonmanual cues where useful.',
+      'Confidence is recognition confidence, not a proficiency score. Keep the note short and practical.'
+    ].join(' ');
+    schema = {
+      type: 'object',
+      properties: {
+        recognized_sequence: {
+          type: 'array',
+          items: { type: 'string', enum: [...UNIT1_CAMERA_VOCAB, 'unclear'] },
+          maxItems: 12,
+        },
+        token_confidences: {
+          type: 'array',
+          items: { type: 'integer', minimum: 0, maximum: 100 },
+          maxItems: 12,
+        },
+        overall_confidence: { type: 'integer', minimum: 0, maximum: 100 },
+        framing_quality: { type: 'integer', minimum: 0, maximum: 100 },
+        note: { type: 'string' },
+      },
+      required: ['recognized_sequence','token_confidences','overall_confidence','framing_quality','note'],
+    };
+  }
+
+  const upstream = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': env.GEMINI_API_KEY,
+      'Api-Revision': '2026-05-20',
+    },
+    body: JSON.stringify({
+      model: 'gemini-3.8-flash',
+      input: [
+        {
+          type: 'video',
+          data: base64,
+          mime_type: mimeType,
+          processing: { type: 'static', fps: 6 },
+        },
+        { type: 'text', text: textPrompt },
+      ],
+      response_format: {
+        type: 'text',
+        mime_type: 'application/json',
+        schema,
+      },
+    }),
+  });
+
+  const payload = await upstream.json().catch(() => ({}));
+  if (!upstream.ok) {
+    const upstreamMessage = payload?.error?.message || payload?.message || `Gemini returned ${upstream.status}`;
+    throw new Error(upstreamMessage);
+  }
+  const outputText = extractInteractionText(payload);
+  if (!outputText) throw new Error('Gemini returned no recognition result.');
+  try { return JSON.parse(outputText); }
+  catch { throw new Error('Gemini returned an unreadable recognition result.'); }
+}
+
+async function aslAnalyzeResponse(request, env) {
+  const url = new URL(request.url);
+  if (!env.GEMINI_API_KEY) {
+    return Response.json({ error: 'Camera AI is not configured.', code: 'AI_NOT_CONFIGURED' }, { status: 503 });
+  }
+  const mode = url.searchParams.get('mode');
+  if (!['alphabet','conversation'].includes(mode)) return Response.json({ error: 'Invalid camera practice mode.' }, { status: 400 });
+
+  const mimeType = (request.headers.get('content-type') || 'video/webm').split(';')[0].toLowerCase();
+  const allowedTypes = new Set(['video/mp4','video/webm','video/quicktime','video/mov','video/mpeg','video/3gpp']);
+  if (!allowedTypes.has(mimeType)) return Response.json({ error: `Unsupported camera video type: ${mimeType}` }, { status: 415 });
+
+  const declared = Number(request.headers.get('content-length') || 0);
+  const maxBytes = 12 * 1024 * 1024;
+  if (declared > maxBytes) return Response.json({ error: 'Camera clip is too large. Keep attempts short.' }, { status: 413 });
+  const bytes = await request.arrayBuffer();
+  if (!bytes.byteLength) return Response.json({ error: 'Camera clip was empty.' }, { status: 400 });
+  if (bytes.byteLength > maxBytes) return Response.json({ error: 'Camera clip is too large. Keep attempts short.' }, { status: 413 });
+
+  try {
+    if (mode === 'alphabet') {
+      const target = (url.searchParams.get('target') || '').toUpperCase();
+      if (!/^[A-Z]$/.test(target)) return Response.json({ error: 'A target letter is required.' }, { status: 400 });
+      const result = await callGeminiForAsl({ env, bytes, mimeType, mode, promptText: '' });
+      const recognized = String(result.recognized_letter || 'UNCLEAR').toUpperCase();
+      return Response.json({
+        recognized_letter: recognized,
+        target_match: recognized === target,
+        overall_confidence: Math.max(0, Math.min(100, Number(result.overall_confidence || 0))),
+        framing_quality: Math.max(0, Math.min(100, Number(result.framing_quality || 0))),
+        note: String(result.note || '').slice(0, 220),
+      }, { headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    const promptId = url.searchParams.get('prompt') || '';
+    const prompt = CAMERA_CONVERSATION_PROMPTS[promptId];
+    if (!prompt) return Response.json({ error: 'Unknown Unit 1 conversation prompt.' }, { status: 400 });
+    const result = await callGeminiForAsl({ env, bytes, mimeType, mode, promptText: prompt.text });
+    const recognized = (Array.isArray(result.recognized_sequence) ? result.recognized_sequence : [])
+      .map(normalizeCameraToken)
+      .filter(token => token && token !== 'unclear' && UNIT1_CAMERA_VOCAB.includes(token));
+    const recognizedSet = new Set(recognized);
+    const detected = prompt.expected.filter(token => recognizedSet.has(normalizeCameraToken(token))).length;
+    const coverage = Math.round((detected / Math.max(prompt.expected.length, 1)) * 100);
+    return Response.json({
+      recognized_sequence: recognized,
+      token_confidences: Array.isArray(result.token_confidences) ? result.token_confidences.slice(0, recognized.length) : [],
+      overall_confidence: Math.max(0, Math.min(100, Number(result.overall_confidence || 0))),
+      framing_quality: Math.max(0, Math.min(100, Number(result.framing_quality || 0))),
+      coverage_percent: coverage,
+      expected_concepts: prompt.expected,
+      note: String(result.note || '').slice(0, 220),
+    }, { headers: { 'Cache-Control': 'no-store' } });
+  } catch (error) {
+    return Response.json({ error: error.message || 'Could not analyze this ASL clip.' }, { status: 502, headers: { 'Cache-Control': 'no-store' } });
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === '/api/health') return Response.json({ ok: true, app: 'ASLingo', version: '0.3.0' });
+    if (url.pathname === '/api/health') return Response.json({ ok: true, app: 'ASLingo', version: '0.4.0-camera-beta' });
     if (url.pathname === '/api/signs') return signsResponse();
     if (url.pathname === '/api/course-sign') return courseSignResponse(request);
     if (url.pathname === '/api/video') return videoResponse(request);
     if (url.pathname === '/api/video-stream') return videoStreamResponse(request);
+    if (url.pathname === '/api/asl-analyze' && request.method === 'POST') return aslAnalyzeResponse(request, env);
     if (url.pathname.startsWith('/api/')) return Response.json({ error: 'Not found' }, { status: 404 });
     return env.ASSETS.fetch(request);
   },

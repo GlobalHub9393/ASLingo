@@ -389,15 +389,15 @@ function PlacementQuiz({letters,name,onComplete}) {
   const [started,setStarted]=useState(false);
   const [questions]=useState(()=>shuffle(letters).slice(0,Math.min(12,letters.length)));
   const [index,setIndex]=useState(0); const [answers,setAnswers]=useState([]); const [selected,setSelected]=useState(null); const [busy,setBusy]=useState(false);
+  const q=questions[index];
+  const opts=useMemo(()=>q?shuffle([q,...shuffle(letters.filter(l=>l.letter!==q.letter)).slice(0,3)]):[],[q?.letter]);
   if(!started)return <main className="onboarding-shell"><section className="onboarding-card">
     <div className="placement-icon"><Sparkles size={28}/></div><p className="eyebrow">Quick placement</p>
     <h1>Let’s see what you know{name?`, ${name.split(' ')[0]}`:''}.</h1>
     <p className="muted">12 alphabet questions. You can still jump anywhere in the course later.</p>
     <button className="primary-button" onClick={()=>setStarted(true)}>Start skill check</button>
   </section></main>;
-  const q=questions[index];
   if(!q)return <FullScreenLoading label="Finishing…"/>;
-  const opts=useMemo(()=>shuffle([q,...shuffle(letters.filter(l=>l.letter!==q.letter)).slice(0,3)]),[q.letter]);
   async function next(){
     if(!selected)return;
     const a={letter:q.letter,correct:selected===q.letter}; const all=[...answers,a];
@@ -620,7 +620,11 @@ function AlphabetLessonPlayer({lesson,letters,allLetters,onClose,onFinish}) {
   }
   async function next(){
     if(qIndex===questions.length-1){
-      setBusy(true); const all=answers; const s=all.length?Math.round(all.filter(a=>a.correct).length/all.length*100):100;
+      setBusy(true);
+      const q=questions[qIndex];
+      const finalAnswer={letter:q.target.letter,correct:selected===q.target.letter};
+      const all=[...answers,finalAnswer];
+      const s=all.length?Math.round(all.filter(a=>a.correct).length/all.length*100):100;
       await onFinish(lesson,all);setScore(s);setPhase('done');setBusy(false);return;
     }
     setQIndex(i=>i+1);setSelected(null);
@@ -725,7 +729,10 @@ function StudyQuiz({courseRefs,letters,onClose,onFinish}) {
     if(selected==null)return;
     if(index<questions.length-1){setIndex(i=>i+1);setSelected(null);return}
     setBusy(true);
-    const finalAnswers=answers;
+    const finalEntry=q.type==='sign'
+      ? {type:'sign',sign:q.target.sign,correct:selected===q.target.sign.id}
+      : {type:'letter',letter:q.target.letter,correct:selected===q.target.letter};
+    const finalAnswers=[...answers,finalEntry];
     const s=Math.round(finalAnswers.filter(a=>a.correct).length/Math.max(finalAnswers.length,1)*100);
     try{
       await onFinish({

@@ -521,7 +521,7 @@ async function callGeminiForAsl({ env, bytes, mimeType, mode, promptText }) {
     },
   });
 
-  const models = ['gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'];
+  const models = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
   let payload = {};
   let upstream = null;
 
@@ -539,16 +539,21 @@ async function callGeminiForAsl({ env, bytes, mimeType, mode, promptText }) {
     payload = await upstream.json().catch(() => ({}));
     if (upstream.ok) break;
 
+    const upstreamMessage = payload?.error?.message || payload?.message || '';
     const isRateLimit = upstream.status === 429 ||
-      /quota|rate.?limit|resource_exhausted/i.test(payload?.error?.message || payload?.message || '');
+      /quota|rate.?limit|resource_exhausted/i.test(upstreamMessage);
+    const isModelUnavailable = upstream.status === 404 ||
+      /no longer available|not available to new users|model.*(?:unavailable|unsupported|not found)|unsupported model/i.test(upstreamMessage);
+    const canTryNext = i < models.length - 1 && (isRateLimit || isModelUnavailable);
 
-    if (!isRateLimit || i === models.length - 1) {
-      if (isRateLimit) {
-        throw new Error('Camera AI is temporarily rate-limited. Wait about a minute, then try again.');
-      }
-      const upstreamMessage = payload?.error?.message || payload?.message || `Gemini returned ${upstream.status}`;
-      throw new Error(upstreamMessage);
+    if (canTryNext) continue;
+    if (isRateLimit) {
+      throw new Error('Camera AI is temporarily rate-limited. Wait about a minute, then try again.');
     }
+    if (isModelUnavailable) {
+      throw new Error('Camera AI model is temporarily unavailable. Try again shortly.');
+    }
+    throw new Error(upstreamMessage || `Gemini returned ${upstream.status}`);
   }
 
   const outputText = extractInteractionText(payload);
@@ -556,6 +561,325 @@ async function callGeminiForAsl({ env, bytes, mimeType, mode, promptText }) {
   try { return JSON.parse(outputText); }
   catch { throw new Error('Gemini returned an unreadable recognition result.'); }
 }
+
+
+function clampCameraPercent(value) {
+  return Math.max(0, Math.min(100, Math.round(Number(value || 0))));
+}
+
+function safeCameraNote(value, max = 180) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function averageCamera(values) {
+  const nums = values.map(Number).filter(Number.isFinite);
+  return nums.length ? Math.round(nums.reduce((a, b) => a + b, 0) / nums.length) : 0;
+}
+
+function parseGeminiJson(text) {
+  const raw = String(text || '').trim();
+  if (!raw) throw new Error('Gemini returned no recognition result.');
+
+  const cleaned = raw
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+  try { return JSON.parse(cleaned); } catch {}
+
+  const first = cleaned.indexOf('{');
+  const last = cleaned.lastIndexOf('}');
+  if (first >= 0 && last > first) {
+    try { return JSON.parse(cleaned.slice(first, last + 1)); } catch {}
+  }
+  throw new Error('Gemini returned an unreadable recognition result.');
+}
+
+function cameraSessionPrompt(mode, segments) {
+  if (mode === 'alphabet_session') {
+    const intervals = segments.map((segment, index) => ({
+      index,
+      start_seconds: Number(segment.start_ms || 0) / 1000,
+      end_seconds: Number(segment.end_ms || 0) / 1000,
+    }));
+
+    return [
+      'You are an experimental ASL fingerspelling recognizer evaluating one continuous practice video.',
+      `There are exactly ${intervals.length} marked intervals.`,
+      'Each interval contains one fingerspelled ASL letter.',
+      'The intended target letters are intentionally hidden from you. Do not infer an alphabetical sequence and do not use neighboring intervals to guess.',
+      'Independently identify only what is visibly produced in each interval as A through Z or UNCLEAR.',
+      'Pay close attention to handshape, thumb placement, palm orientation and movement, especially J and Z.',
+      'Confidence is visual recognition confidence, not learner proficiency.',
+      `Intervals: ${JSON.stringify(intervals)}`,
+      'Return ONLY valid JSON, no markdown and no commentary, using exactly this shape:',
+      '{"segment_results":[{"index":0,"recognized_letter":"A","confidence":90,"note":""}],"overall_confidence":90,"framing_quality":90,"note":""}',
+      `Return exactly ${intervals.length} segment_results, one for every index.`,
+    ].join(' ');
+  }
+
+  const intervals = segments.map((segment, index) => {
+    const prompt = CAMERA_CONVERSATION_PROMPTS[segment.prompt_id];
+    return {
+      index,
+      start_seconds: Number(segment.start_ms || 0) / 1000,
+      end_seconds: Number(segment.end_ms || 0) / 1000,
+      practice_prompt: prompt?.text || '',
+    };
+  });
+
+  return [
+    'You are an experimental constrained ASL practice recognizer evaluating one continuous Unit 1 review video.',
+    `There are exactly ${intervals.length} marked conversation turns.`,
+    `The ONLY vocabulary tokens you may report are: ${UNIT1_CAMERA_VOCAB.join(', ')}, unclear.`,
+    'Use each time interval to inspect only that turn.',
+    'The practice prompt is context, not an answer key. Report only signs you can actually see and never invent missing signs.',
+    'The signer may use ASL word order rather than English word order.',
+    'Ignore personal-name fingerspelling that is not confidently readable rather than inventing a name.',
+    'Use visible handshape, movement, location, orientation, body position and nonmanual cues where useful.',
+    'Confidence is visual recognition confidence, not a proficiency score.',
+    `Turns: ${JSON.stringify(intervals)}`,
+    'Return ONLY valid JSON, no markdown and no commentary, using exactly this shape:',
+    '{"segment_results":[{"index":0,"recognized_sequence":["hello","my","name"],"token_confidences":[90,85,88],"confidence":88,"note":""}],"overall_confidence":88,"framing_quality":90,"note":""}',
+    `Return exactly ${intervals.length} segment_results, one for every index.`,
+  ].join(' ');
+}
+
+async function geminiVideoAttempt({ env, base64, mimeType, prompt, model, processing }) {
+  const video = {
+    type: 'video',
+    data: base64,
+    mime_type: mimeType,
+  };
+  if (processing) video.processing = processing;
+
+  const upstream = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': env.GEMINI_API_KEY,
+    },
+    body: JSON.stringify({
+      model,
+      input: [
+        video,
+        { type: 'text', text: prompt },
+      ],
+      generation_config: {
+        temperature: 0.1,
+        max_output_tokens: 5000,
+      },
+    }),
+  });
+
+  const payload = await upstream.json().catch(() => ({}));
+  return { upstream, payload };
+}
+
+async function callGeminiForAslSession({ env, bytes, mimeType, mode, segments }) {
+  const base64 = arrayBufferToBase64(bytes);
+  const prompt = cameraSessionPrompt(mode, segments);
+
+  // 3.5 Flash-Lite supports video and agentic video understanding. Start there.
+  // If Google's current endpoint rejects agentic processing for this request,
+  // retry the SAME model with default static processing before changing models.
+  const attempts = [
+    { model: 'gemini-3.5-flash-lite', processing: 'agentic' },
+    { model: 'gemini-3.5-flash-lite', processing: null },
+    { model: 'gemini-3.5-flash', processing: null },
+    { model: 'gemini-3.1-flash-lite', processing: null },
+  ];
+
+  let lastMessage = '';
+  let sawRateLimit = false;
+
+  for (let i = 0; i < attempts.length; i++) {
+    const attempt = attempts[i];
+    const { upstream, payload } = await geminiVideoAttempt({
+      env,
+      base64,
+      mimeType,
+      prompt,
+      model: attempt.model,
+      processing: attempt.processing,
+    });
+
+    if (upstream.ok) {
+      const outputText = extractInteractionText(payload);
+      return parseGeminiJson(outputText);
+    }
+
+    const message = payload?.error?.message || payload?.message || `Gemini returned ${upstream.status}`;
+    lastMessage = message;
+
+    const isRateLimit = upstream.status === 429 ||
+      /quota|rate.?limit|resource_exhausted/i.test(message);
+    const isInvalidArgument = upstream.status === 400 ||
+      /invalid argument|invalid_request/i.test(message);
+    const isModelUnavailable = upstream.status === 404 ||
+      /no longer available|not available to new users|model.*(?:unavailable|unsupported|not found)|unsupported model/i.test(message);
+
+    if (isRateLimit) {
+      sawRateLimit = true;
+      // Try a model with a separate quota bucket.
+      continue;
+    }
+
+    // The first retry specifically removes agentic processing from the same model.
+    if (isInvalidArgument && i === 0) continue;
+
+    if (isModelUnavailable || isInvalidArgument) continue;
+
+    throw new Error(message);
+  }
+
+  if (sawRateLimit && /quota|rate.?limit|resource_exhausted/i.test(lastMessage)) {
+    throw new Error('Camera AI is temporarily rate-limited. Wait about a minute, then try again.');
+  }
+
+  if (/invalid argument|invalid_request/i.test(lastMessage)) {
+    throw new Error('Google rejected the camera-analysis request. The app tried its compatibility fallbacks too.');
+  }
+
+  throw new Error(lastMessage || 'Camera AI could not analyze this review.');
+}
+
+async function aslSessionResponse(request, env) {
+  if (!env.GEMINI_API_KEY) {
+    return Response.json({ error: 'Camera AI is not configured.', code: 'AI_NOT_CONFIGURED' }, { status: 503 });
+  }
+
+  let form;
+  try { form = await request.formData(); }
+  catch { return Response.json({ error: 'Could not read the camera session upload.' }, { status: 400 }); }
+
+  const mode = String(form.get('mode') || '');
+  if (!['alphabet_session','unit1_session'].includes(mode)) {
+    return Response.json({ error: 'Invalid camera review mode.' }, { status: 400 });
+  }
+
+  let segments;
+  try { segments = JSON.parse(String(form.get('segments') || '[]')); }
+  catch { return Response.json({ error: 'Camera review timing data was invalid.' }, { status: 400 }); }
+
+  if (!Array.isArray(segments) || !segments.length || segments.length > 26) {
+    return Response.json({ error: 'Camera review timing data was incomplete.' }, { status: 400 });
+  }
+
+  const video = form.get('video');
+  if (!video || typeof video.arrayBuffer !== 'function') {
+    return Response.json({ error: 'Camera review video was missing.' }, { status: 400 });
+  }
+
+  const mimeType = String(video.type || 'video/webm').split(';')[0].toLowerCase();
+  const allowedTypes = new Set(['video/mp4','video/webm','video/quicktime','video/mov','video/mpeg','video/3gpp']);
+  if (!allowedTypes.has(mimeType)) {
+    return Response.json({ error: `Unsupported camera video type: ${mimeType}` }, { status: 415 });
+  }
+
+  const maxBytes = 18 * 1024 * 1024;
+  if (Number(video.size || 0) > maxBytes) {
+    return Response.json({ error: 'Camera review video is too large. Move through the prompts a little faster and try again.' }, { status: 413 });
+  }
+
+  const cleaned = [];
+  for (let index = 0; index < segments.length; index++) {
+    const raw = segments[index] || {};
+    const startMs = Math.max(0, Number(raw.start_ms || 0));
+    const endMs = Math.max(startMs, Number(raw.end_ms || 0));
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+      return Response.json({ error: `Timing for review item ${index + 1} was invalid.` }, { status: 400 });
+    }
+
+    if (mode === 'alphabet_session') {
+      const target = String(raw.target || '').toUpperCase();
+      if (!/^[A-Z]$/.test(target)) return Response.json({ error: `Alphabet target ${index + 1} was invalid.` }, { status: 400 });
+      cleaned.push({ index, start_ms: Math.round(startMs), end_ms: Math.round(endMs), target });
+    } else {
+      const promptId = String(raw.prompt_id || '');
+      if (!CAMERA_CONVERSATION_PROMPTS[promptId]) {
+        return Response.json({ error: `Unit 1 prompt ${index + 1} was invalid.` }, { status: 400 });
+      }
+      cleaned.push({ index, start_ms: Math.round(startMs), end_ms: Math.round(endMs), prompt_id: promptId });
+    }
+  }
+
+  const bytes = await video.arrayBuffer();
+  if (!bytes.byteLength) return Response.json({ error: 'Camera review video was empty.' }, { status: 400 });
+
+  try {
+    const ai = await callGeminiForAslSession({ env, bytes, mimeType, mode, segments: cleaned });
+    const byIndex = new Map(
+      (Array.isArray(ai.segment_results) ? ai.segment_results : [])
+        .map(row => [Number(row?.index), row])
+        .filter(([index]) => Number.isInteger(index))
+    );
+
+    if (mode === 'alphabet_session') {
+      const results = cleaned.map((segment, index) => {
+        const row = byIndex.get(index) || {};
+        const recognized = String(row.recognized_letter || 'UNCLEAR').toUpperCase();
+        return {
+          index,
+          target: segment.target,
+          recognized_letter: /^[A-Z]$/.test(recognized) ? recognized : 'UNCLEAR',
+          confidence: clampCameraPercent(row.confidence),
+          target_match: recognized === segment.target,
+          duration_ms: segment.end_ms - segment.start_ms,
+          note: safeCameraNote(row.note, 120),
+        };
+      });
+      return Response.json({
+        mode,
+        results,
+        overall_confidence: clampCameraPercent(ai.overall_confidence || averageCamera(results.map(r => r.confidence))),
+        framing_quality: clampCameraPercent(ai.framing_quality),
+        agreement_percent: Math.round(results.filter(r => r.target_match).length / Math.max(results.length, 1) * 100),
+        note: safeCameraNote(ai.note),
+      }, { headers: { 'Cache-Control': 'no-store' } });
+    }
+
+    const results = cleaned.map((segment, index) => {
+      const row = byIndex.get(index) || {};
+      const prompt = CAMERA_CONVERSATION_PROMPTS[segment.prompt_id];
+      const recognized = (Array.isArray(row.recognized_sequence) ? row.recognized_sequence : [])
+        .map(normalizeCameraToken)
+        .filter(token => token && token !== 'unclear' && UNIT1_CAMERA_VOCAB.includes(token));
+      const recognizedSet = new Set(recognized);
+      const detected = prompt.expected.filter(token => recognizedSet.has(normalizeCameraToken(token))).length;
+      const coverage = Math.round(detected / Math.max(prompt.expected.length, 1) * 100);
+      return {
+        index,
+        prompt_id: segment.prompt_id,
+        prompt_text: prompt.text,
+        recognized_sequence: recognized,
+        token_confidences: Array.isArray(row.token_confidences)
+          ? row.token_confidences.slice(0, recognized.length).map(clampCameraPercent)
+          : [],
+        confidence: clampCameraPercent(row.confidence),
+        coverage_percent: coverage,
+        expected_concepts: prompt.expected,
+        duration_ms: segment.end_ms - segment.start_ms,
+        note: safeCameraNote(row.note, 120),
+      };
+    });
+
+    return Response.json({
+      mode,
+      results,
+      overall_confidence: clampCameraPercent(ai.overall_confidence || averageCamera(results.map(r => r.confidence))),
+      framing_quality: clampCameraPercent(ai.framing_quality),
+      average_coverage_percent: averageCamera(results.map(r => r.coverage_percent)),
+      note: safeCameraNote(ai.note),
+    }, { headers: { 'Cache-Control': 'no-store' } });
+  } catch (error) {
+    return Response.json(
+      { error: error.message || 'Could not analyze this camera review.' },
+      { status: 502, headers: { 'Cache-Control': 'no-store' } }
+    );
+  }
+}
+
 
 async function aslAnalyzeResponse(request, env) {
   const url = new URL(request.url);
@@ -618,11 +942,12 @@ async function aslAnalyzeResponse(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === '/api/health') return Response.json({ ok: true, app: 'ASLingo', version: '0.4.1-camera-beta' });
+    if (url.pathname === '/api/health') return Response.json({ ok: true, app: 'ASLingo', version: '0.5.1-camera-batch' });
     if (url.pathname === '/api/signs') return signsResponse();
     if (url.pathname === '/api/course-sign') return courseSignResponse(request);
     if (url.pathname === '/api/video') return videoResponse(request);
     if (url.pathname === '/api/video-stream') return videoStreamResponse(request);
+    if (url.pathname === '/api/asl-session' && request.method === 'POST') return aslSessionResponse(request, env);
     if (url.pathname === '/api/asl-analyze' && request.method === 'POST') return aslAnalyzeResponse(request, env);
     if (url.pathname.startsWith('/api/')) return Response.json({ error: 'Not found' }, { status: 404 });
     return env.ASSETS.fetch(request);

@@ -1,28 +1,18 @@
-# ASLingo — Build 0.1 (GitHub Mobile Flat Edition)
+# ASLingo V1.0 course engine
 
-This edition is intentionally **flat**: every file can live at the root of the GitHub repository. That makes it easy to upload from iPhone, where GitHub's web uploader does not preserve folders.
+This ZIP contains replacement root-level files for the flat GitHub/Cloudflare setup:
 
-## Cloudflare Pages
+- `App.jsx` — full course UI + lesson engine
+- `styles.css` — iPhone-first UI
+- `sw.js` — bumps the PWA cache
+- `worker.js` — include your fixed proxy worker if present in this ZIP
 
-- Framework preset: Vite (or None)
+## Important
+The complete 6-level course is already seeded in Neon but intentionally **unpublished** so the existing live app does not break before this UI is deployed.
+
+After these files are uploaded and Cloudflare finishes deploying, tell ChatGPT **"V1 deployed"**. The course can then be published in Neon in one step.
+
+Cloudflare settings stay:
 - Build command: `npm run build`
-- Build output directory: `dist`
-
-The build automatically copies the PWA files and creates `dist/_worker.js`. Cloudflare Pages Advanced Mode uses that worker for:
-
-- `/api/health`
-- `/api/signs`
-- `/api/video`
-- all other paths fall through to the static Vite app
-
-No `/functions` folder is required in this edition.
-
-## Backend
-
-The app is already pointed at the ASL Learning Neon project created for ASLingo.
-
-After Cloudflare gives the production `*.pages.dev` URL, add it to Neon Auth trusted origins.
-
-## Files that belong at repo root
-
-`App.jsx`, `main.jsx`, `styles.css`, `neon.js`, `index.html`, `package.json`, `vite.config.js`, `manifest.webmanifest`, `sw.js`, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`, `worker.js`, `build-flat.mjs`, `README.md`.
+- Output directory: `dist`
+- Framework preset: None

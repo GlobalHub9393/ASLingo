@@ -1,35 +1,54 @@
-ASLingo Local Camera Alphabet - Final Beta v3
+ASLingo Tonight Build — Alphabet + Extra Practice + Guided Fingerspelling
 
-Replace:
+REPLACE:
 - local-camera.html
 - local-camera.css
 - local-camera.js
+- main.jsx
+- vite.config.js
 
-No package/vite changes are needed if MediaPipe beta is already deployed.
+ADD:
+- practice-enhancer.js
+- practice.html
+- practice.css
+- fingerspell.html
+- fingerspell.css
+- fingerspell.js
 
-Alphabet behavior:
-- Camera may be on without scoring.
-- Tap START CHECKING to begin.
-- Static letters auto-advance after staying above the chosen confidence threshold
-  for the selected hold time.
-- Default is 80% for 0.8 seconds.
-- Confidence dropping below threshold resets the hold timer.
+WHAT CHANGED
 
-J / Z:
-- They no longer use generic "amount of movement" scoring.
-- J gets a visible J stencil and tracks LANDMARK 20 (pinky tip).
-- Z gets a visible Z stencil and tracks LANDMARK 8 (index tip).
-- The correct starting handshape is required before tracing begins.
-- The fingertip must enter the start circle, then hit every checkpoint IN ORDER.
-- Random waving cannot satisfy the ordered checkpoint trace.
-- Dropping the required handshape or taking too long resets the trace.
-- J/Z auto-advance immediately after a successful ordered trace.
+1) FINISHED ALPHABET HAND TRACKER
+- Static letters keep the auto-check / hold / auto-advance behavior.
+- X rule is more forgiving for the hooked index handshape.
+- J and Z stencils are moved to the RIGHT side of the visible camera.
+- J/Z checkpoints are much more forgiving. You only need to stay close and hit
+  the checkpoints in order; not pixel-perfect dot-to-dot.
+- J tracks pinky tip; Z tracks index fingertip.
 
-Calibration:
-- Old v1 teaching data is ignored by using a fresh calibration storage key.
-- Calibration is allowed only for subtle A/E/M/N/S/T handshapes.
-- Only one current calibration is kept per subtle letter.
-- Calibration contributes only a small correction and cannot manufacture a pass.
+2) INCLUDED AFTER THE ALPHABET COURSE
+- The normal alphabet lessons remain unchanged.
+- After completing the FINAL U-Z alphabet lesson, the Lesson Complete screen gets:
+  "Camera Alphabet Check · BETA"
+- It is optional and opens the finished on-device A-Z tracker.
 
-This is the version to finish testing before wiring Camera Alphabet Check into
-the end of the normal Alphabet lesson sequence.
+3) NEW PRACTICE TAB
+- Adds a fifth "Practice" tab to the normal bottom navigation.
+- Practice opens /practice.html.
+- Contains hand-tracking-only extra practice.
+
+4) GUIDED FINGERSPELLING
+- New /fingerspell.html.
+- Pick a word or type your own word (letters only, max 12).
+- ASLingo highlights the current letter.
+- Hold >=80% confidence for 0.65 seconds and it automatically advances.
+- J/Z use the forgiving motion stencil.
+- At the end it reports overall word confidence and per-letter confidence.
+- This is TARGET-GUIDED fingerspelling confidence, not unrestricted recognition yet.
+- No Gemini API calls.
+
+Suggested tonight test:
+1. Finish U-Z alphabet lesson and confirm Camera Alphabet Check appears.
+2. Bottom nav -> Practice.
+3. Run one A-Z Camera Check.
+4. Practice -> Guided Fingerspelling -> NAME.
+5. Have Kayla sign in and do the same normal lesson/practice flow.

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#f6f7fb" />
+  <title>ASLingo Extra Practice</title>
+  <link rel="stylesheet" href="/practice.css" />
+</head>
+<body>
+  <main class="practice-shell">
+    <header class="practice-head">
+      <button class="back" onclick="location.href='/'" aria-label="Back">←</button>
+      <div>
+        <p class="eyebrow">ASLingo</p>
+        <h1>Extra Practice</h1>
+        <p>Camera tools that run on your device. No Gemini required.</p>
+      </div>
+    </header>
+
+    <section class="practice-hero">
+      <span class="beta">ON-DEVICE BETA</span>
+      <h2>Practice with your hands, not another quiz.</h2>
+      <p>These activities use MediaPipe hand tracking for instant feedback. Your camera video is not uploaded to ASLingo or Gemini.</p>
+    </section>
+
+    <section class="practice-card">
+      <div class="icon">✋</div>
+      <div class="copy">
+        <span class="tag">Alphabet</span>
+        <h2>Camera Alphabet Check</h2>
+        <p>Sign A–Z. Hold each static letter above the confidence target to advance automatically. J and Z use guided motion tracing.</p>
+      </div>
+      <button onclick="location.href='/local-camera.html'">Start A–Z check →</button>
+    </section>
+
+    <section class="practice-card featured">
+      <div class="icon">🤟</div>
+      <div class="copy">
+        <span class="tag">New</span>
+        <h2>Guided Fingerspelling</h2>
+        <p>Choose a word, then fingerspell it letter by letter. ASLingo auto-advances when each letter holds confidence long enough and gives you a word confidence score.</p>
+      </div>
+      <button onclick="location.href='/fingerspell.html'">Practice fingerspelling →</button>
+    </section>
+
+    <section class="coming-card">
+      <span>Later</span>
+      <b>Free fingerspelling recognition</b>
+      <p>The next version will try to recognize an unknown sequence instead of showing you the target letter first.</p>
+    </section>
+  </main>
+</body>
+</html>

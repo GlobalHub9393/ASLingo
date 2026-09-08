@@ -1,5 +1,6 @@
 import './runtime-fixes.js';
 import './social-enhancer.js';
+import './practice-enhancer.js';
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';

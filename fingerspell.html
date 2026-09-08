@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#f4f7fb" />
+  <title>ASLingo Guided Fingerspelling</title>
+  <link rel="stylesheet" href="/fingerspell.css" />
+</head>
+<body>
+  <main class="fs-shell">
+    <header class="topbar">
+      <button class="back" onclick="location.href='/practice.html'">←</button>
+      <div><p class="eyebrow">Extra Practice · Beta</p><h1>Guided Fingerspelling</h1></div>
+      <span class="local">On device</span>
+    </header>
+
+    <section class="setup card" id="setup">
+      <p class="eyebrow">Choose a word</p>
+      <h2>Spell it with your hand.</h2>
+      <p class="muted">ASLingo shows the word but only highlights one target letter at a time. Hold a good handshape and it moves forward automatically.</p>
+      <div class="word-grid" id="wordGrid"></div>
+      <label class="custom"><span>Or type your own word</span><input id="customWord" maxlength="12" placeholder="NAME" autocomplete="off" /></label>
+      <button class="primary" id="startWord">Start camera</button>
+    </section>
+
+    <section class="camera-card card hidden" id="cameraCard">
+      <div class="word-display" id="wordDisplay"></div>
+      <div class="progress-copy"><span id="letterCount">1/4</span><b id="targetText">Sign N</b><span id="sessionConfidence">Word confidence —</span></div>
+
+      <div class="camera-wrap">
+        <video id="camera" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="camera-badge" id="cameraBadge">Loading…</div>
+      </div>
+
+      <div class="confidence-row">
+        <div class="big-confidence"><b id="confidence">—</b><span>letter confidence</span></div>
+        <div class="hold">
+          <span>Hold above 80%</span>
+          <div class="bar"><i id="holdBar"></i></div>
+        </div>
+      </div>
+
+      <div class="trace-help hidden" id="traceHelp"></div>
+      <p class="feedback" id="feedback">Show your signing hand clearly.</p>
+
+      <div class="controls">
+        <button class="secondary" id="restartWord">Restart word</button>
+        <button class="secondary" id="newWord">New word</button>
+      </div>
+    </section>
+
+    <section class="result card hidden" id="resultCard">
+      <p class="eyebrow">Word complete</p>
+      <h2 id="resultWord">NAME</h2>
+      <div class="result-score" id="resultScore">88%</div>
+      <p id="resultCopy" class="muted"></p>
+      <div id="resultLetters"></div>
+      <button class="primary" id="again">Spell another word</button>
+    </section>
+
+    <p class="privacy">This is guided confidence practice, not unrestricted ASL recognition. Camera frames stay on your device.</p>
+  </main>
+  <script type="module" src="/fingerspell.js"></script>
+</body>
+</html>

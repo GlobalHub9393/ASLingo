@@ -57,8 +57,8 @@ let holdPeak = 0;
 let cooldownUntil = 0;
 let traceState = null;
 let traceStartHoldAt = null;
-const TRACE_TOLERANCE = 0.062;
-const TRACE_START_HOLD_MS = 260;
+const TRACE_TOLERANCE = 0.105;
+const TRACE_START_HOLD_MS = 180;
 const TRACE_TIMEOUT_MS = 5000;
 
 const clamp = (v,min=0,max=1)=>Math.max(min,Math.min(max,v));
@@ -186,13 +186,11 @@ function traceGuide(letter){
       finger:20,
       label:'Use your pinky tip. Start in the green circle with an I handshape, then trace the J in order.',
       points:[
-        {x:.50,y:.27},
-        {x:.50,y:.39},
-        {x:.50,y:.52},
-        {x:.51,y:.62},
-        {x:.55,y:.69},
-        {x:.62,y:.72},
-        {x:.69,y:.69},
+        {x:.26,y:.27},
+        {x:.26,y:.43},
+        {x:.27,y:.58},
+        {x:.31,y:.68},
+        {x:.39,y:.71},
       ],
     };
   }
@@ -200,16 +198,13 @@ function traceGuide(letter){
     finger:8,
     label:'Use your index fingertip. Start in the green circle, then trace the Z through every checkpoint in order.',
     points:[
-      {x:.68,y:.29},
-      {x:.56,y:.29},
-      {x:.43,y:.29},
-      {x:.33,y:.29},
-      {x:.44,y:.40},
-      {x:.56,y:.52},
-      {x:.68,y:.64},
-      {x:.56,y:.64},
-      {x:.43,y:.64},
-      {x:.33,y:.64},
+      {x:.40,y:.29},
+      {x:.28,y:.29},
+      {x:.16,y:.29},
+      {x:.28,y:.46},
+      {x:.40,y:.64},
+      {x:.28,y:.64},
+      {x:.16,y:.64},
     ],
   };
 }
@@ -417,7 +412,7 @@ function updateTrace(letter,e){
     const progress=traceProgress(letter);
     holdProgressEl.style.width=`${Math.round(progress*100)}%`;
     checkerStatus.className='checker-status wait';
-    checkerStatus.textContent=`Follow the stencil to the next blue checkpoint.`;
+    checkerStatus.textContent=`Stay close to the stencil and reach the next blue checkpoint. You do not have to be pixel-perfect.`;
   }
 
   return true;
@@ -455,7 +450,7 @@ function ruleScore(letter,f){
     case 'U': return .68*P([1,1,0,0])+.32*togetherIM;
     case 'V': return .66*P([1,1,0,0])+.34*spreadIM;
     case 'W': return .76*P([1,1,1,0])+.24*avg([spreadIM,clamp((f.middleRing-.15)/.4)]);
-    case 'X': return .52*closeness(f.index,.38,.38)+.38*P([0,0,0,0])+.10*(1-f.thumb);
+    case 'X': return .58*closeness(f.index,.42,.50)+.34*avg([1-f.middle,1-f.ring,1-f.pinky])+.08*(1-f.thumb);
     case 'Y': return .72*P([0,0,0,1])+.28*f.thumb;
     case 'Z': return motionStartShapeScore('Z',f);
     default:return 0;

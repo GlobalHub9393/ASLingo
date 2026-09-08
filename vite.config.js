@@ -12,6 +12,8 @@ export default defineConfig({
         friends: resolve(process.cwd(), 'friends.html'),
         mediaAudit: resolve(process.cwd(), 'media-audit.html'),
         localCamera: resolve(process.cwd(), 'local-camera.html'),
+        practice: resolve(process.cwd(), 'practice.html'),
+        fingerspell: resolve(process.cwd(), 'fingerspell.html'),
       },
     },
   },

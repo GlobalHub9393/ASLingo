@@ -4,148 +4,83 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#f4f7fb" />
-  <title>ASLingo Local Camera Beta</title>
+  <title>ASLingo Camera Alphabet</title>
   <link rel="stylesheet" href="/local-camera.css" />
 </head>
 <body>
   <main class="app-shell">
     <header class="topbar">
       <button class="back" id="backButton" aria-label="Back to ASLingo">←</button>
-      <div>
-        <p class="eyebrow">Optional beta · on-device</p>
-        <h1>Local Camera Practice</h1>
-      </div>
+      <div><p class="eyebrow">Optional beta · on-device</p><h1>Camera Alphabet Check</h1></div>
       <div class="privacy-pill">No video upload</div>
     </header>
 
     <section class="intro-card" id="introCard">
       <div class="hero-icon">✋</div>
-      <p class="eyebrow">MediaPipe proof of concept</p>
-      <h2>Can ASLingo check your alphabet without Gemini?</h2>
-      <p>
-        This beta tracks your hand landmarks directly on this device. It does not send
-        your camera frames to the ASLingo server or Gemini.
-      </p>
+      <p class="eyebrow">MediaPipe comparative checker</p>
+      <h2>Sign naturally. ASLingo compares each handshape with its lookalikes.</h2>
+      <p>The checker uses palm-relative geometry, finger bends, thumb position and nearby competing letters. It no longer learns from a “tell me I’m right” calibration.</p>
       <div class="mini-grid">
         <div><b>21</b><span>landmarks / hand</span></div>
-        <div><b>A–Z</b><span>target checks</span></div>
+        <div><b>A–Z</b><span>comparative checks</span></div>
         <div><b>0</b><span>AI API calls</span></div>
       </div>
       <button class="primary" id="startCameraButton">Turn on camera</button>
-      <p class="fineprint">
-        Beta note: this is a constrained target checker, not a general ASL
-        interpreter. Start Checking will automatically advance only after a letter
-        stays above your confidence threshold for the selected hold time. J and Z use a forgiving on-screen tracing guide: pinky tip for J, index tip for Z. Stay near the path and hit the checkpoints in order.
-      </p>
+      <p class="fineprint">95%+ with a clear lead over lookalikes gets a very fast pass after a few stable frames. Lower confidence holds longer. J and Z use forgiving motion traces; close and in order is what matters.</p>
     </section>
 
     <section class="camera-card hidden" id="cameraCard">
       <div class="camera-wrap">
-        <video id="camera" playsinline muted></video>
-        <canvas id="overlay"></canvas>
-        <div class="camera-badge" id="cameraBadge">Loading hand model…</div>
-        <div class="fps-badge" id="fpsBadge">0 fps</div>
+        <video id="camera" playsinline muted></video><canvas id="overlay"></canvas>
+        <div class="camera-badge" id="cameraBadge">Loading hand model…</div><div class="fps-badge" id="fpsBadge">0 fps</div>
       </div>
-
       <div class="checker-controls">
         <div class="checker-settings">
-          <label>
-            <span>Pass at</span>
-            <select id="thresholdSelect">
-              <option value="75">75%</option>
-              <option value="80" selected>80%</option>
-              <option value="85">85%</option>
-            </select>
-          </label>
-          <label>
-            <span>Hold for</span>
-            <select id="holdSelect">
-              <option value="500">0.5 sec</option>
-              <option value="800" selected>0.8 sec</option>
-              <option value="1000">1.0 sec</option>
-              <option value="1200">1.2 sec</option>
-            </select>
-          </label>
+          <label><span>Pass at</span><select id="thresholdSelect"><option value="80">80%</option><option value="82" selected>82%</option><option value="85">85%</option></select></label>
+          <label><span>Normal hold</span><select id="holdSelect"><option value="450">0.45 sec</option><option value="650" selected>0.65 sec</option><option value="800">0.8 sec</option></select></label>
         </div>
         <button class="primary checker-start" id="checkButton">Start checking</button>
       </div>
-
-      <div class="hold-track" aria-hidden="true">
-        <span id="holdProgress"></span>
-      </div>
-      <div class="checker-status" id="checkerStatus">
-        Camera is ready. Tap <b>Start checking</b> when you want ASLingo to begin A–Z.
-      </div>
+      <div class="hold-track"><span id="holdProgress"></span></div>
+      <div class="checker-status" id="checkerStatus">Camera is ready. Tap <b>Start checking</b> when you want ASLingo to begin A–Z.</div>
 
       <div class="prompt-panel">
-        <div>
-          <p class="eyebrow">Target letter</p>
-          <div class="target-letter" id="targetLetter">A</div>
-        </div>
-        <div class="score-box">
-          <div class="ring" id="scoreRing"><span id="scoreValue">—</span></div>
-          <span id="scoreLabel">Show your hand</span>
-        </div>
+        <div><p class="eyebrow">Target letter</p><div class="target-letter" id="targetLetter">A</div></div>
+        <div class="score-box"><div class="ring" id="scoreRing"><span id="scoreValue">—</span></div><span id="scoreLabel">Show your hand</span></div>
       </div>
 
-      <div class="feedback" id="feedback">
-        Keep your signing hand visible from the wrist through the fingertips.
-      </div>
-
+      <div class="feedback" id="feedback">Keep your signing hand visible from wrist through fingertips.</div>
       <div class="motion-help hidden" id="motionHelp"></div>
-
       <div class="confidence-strip">
-        <div>
-          <span>Shape match</span>
-          <b id="shapeScore">—</b>
-        </div>
-        <div>
-          <span>Motion</span>
-          <b id="motionScore">—</b>
-        </div>
-        <div>
-          <span>Hand tracked</span>
-          <b id="trackingScore">—</b>
-        </div>
+        <div><span>Target fit</span><b id="shapeScore">—</b></div>
+        <div><span>Lookalike</span><b id="motionScore">—</b></div>
+        <div><span>Hand tracked</span><b id="trackingScore">—</b></div>
       </div>
-
       <div class="actions">
         <button class="secondary" id="prevButton">← Previous</button>
-        <button class="secondary hidden" id="teachButton">Calibrate my hand</button>
+        <button class="secondary hidden" id="teachButton">Removed</button>
         <button class="primary" id="nextButton">Next →</button>
       </div>
-
-      <div class="teach-note hidden" id="teachNote">
-        Hold <b id="teachLetter">A</b> naturally for about one second. This only
-        fine-tunes hand proportions for a few subtle letters; it cannot turn a wrong
-        handshape into a passing score.
-      </div>
-
+      <div class="teach-note hidden" id="teachNote"><b id="teachLetter">A</b></div>
       <div class="alphabet-grid" id="alphabetGrid"></div>
     </section>
 
     <section class="results-card hidden" id="resultsCard">
-      <p class="eyebrow">Local A–Z session</p>
-      <h2>Review results</h2>
+      <p class="eyebrow">Local A–Z session</p><h2>Review results</h2>
       <div class="results-summary">
-        <div><b id="resultAverage">—</b><span>average confidence</span></div>
-        <div><b id="resultStrong">—</b><span>strong matches</span></div>
-        <div><b id="resultTemplates">—</b><span>hand calibrations</span></div>
+        <div><b id="resultAverage">—</b><span>average match</span></div>
+        <div><b id="resultStrong">—</b><span>auto-passed</span></div>
+        <div><b id="resultTemplates">—</b><span>manual / uncertain</span></div>
       </div>
       <div id="resultRows"></div>
       <button class="primary" id="restartButton">Try A–Z again</button>
     </section>
 
     <section class="privacy-card">
-      <b>What stays local?</b>
-      <p>
-        The camera frames and landmark calculations stay on your device. MediaPipe
-        Tasks may send Google performance/utilization metrics, but not your input
-        images or video. Your optional letter templates are stored in this browser.
-      </p>
+      <b>What does “confidence” mean?</b>
+      <p>It is ASLingo’s confidence that the tracked hand geometry matches the target better than its closest lookalikes. It is not a linguistic grade or certification of ASL correctness. Camera frames stay on this device.</p>
     </section>
   </main>
-
   <script type="module" src="/local-camera.js"></script>
 </body>
 </html>

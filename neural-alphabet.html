@@ -19,30 +19,53 @@
     </header>
 
     <section class="hero">
-      <span class="badge">BLIND RECOGNITION</span>
-      <h2>Don’t tell ASLingo the answer.</h2>
-      <p>Make any static ASL letter. A trained neural network receives the 21 MediaPipe hand landmarks and predicts what it sees. This test does not use our hand-written A–Z rules.</p>
+      <span class="badge">SIGNBRIDGE MLP · BLIND RECOGNITION</span>
+      <h2>Just sign. ASLingo guesses.</h2>
+      <p>No target letter is supplied to the recognizer. MediaPipe finds the hand; a trained 24-letter neural model decides which static ASL handshape it sees.</p>
     </section>
 
     <section class="card" id="intro">
-      <h2>What we’re testing</h2>
-      <p class="muted">If this model can reliably tell apart shapes like E, K, O, P, R, X, A/S/T/M/N on both you and Kayla, we have a much better foundation for fingerspelling.</p>
+      <div class="modelStrip">
+        <div>
+          <span>MODEL</span>
+          <b>24 static letters</b>
+        </div>
+        <div>
+          <span>VALIDATION</span>
+          <b>94.7%</b>
+        </div>
+        <div>
+          <span>VIDEO UPLOAD</span>
+          <b>None</b>
+        </div>
+      </div>
+
+      <h2>What we're testing</h2>
+      <p class="muted">Make a letter naturally. Don't twist your hand until the app agrees. We want to know whether a trained model handles your normal E, K, O, P, R, X and the A/S/T/M/N family better than our hand-written rules.</p>
+
       <button class="primary" id="start">Start neural camera</button>
-      <p class="fine">Static letters only in this lab. J and Z need a temporal model later. The model is an MIT-licensed open-source ASL alphabet classifier and runs locally through LiteRT.js.</p>
+      <div class="errorBox hidden" id="introError"></div>
+
+      <p class="fine"><b>J and Z are intentionally excluded.</b> They are motion letters and need a temporal recognizer. This page is a static-handshape test first.</p>
     </section>
 
     <section class="card hidden" id="cameraCard">
       <div class="cameraWrap">
         <video id="camera" playsinline muted></video>
         <canvas id="overlay"></canvas>
-        <div class="pill" id="status">Loading model…</div>
+        <div class="pill" id="status">Starting…</div>
         <div class="fps" id="fps">0 fps</div>
       </div>
 
+      <div class="trackerMeta">
+        <span id="handMeta">Waiting for hand…</span>
+        <span id="modelMeta">SignBridge model</span>
+      </div>
+
       <section class="prediction">
-        <p class="eyebrow">Model prediction</p>
+        <p class="eyebrow">ASLingo sees</p>
         <div class="bigLetter" id="bigLetter">—</div>
-        <div class="bigConfidence" id="bigConfidence">Show your hand</div>
+        <div class="bigConfidence" id="bigConfidence">Show your signing hand</div>
 
         <div class="stability">
           <span>Prediction stability</span>
@@ -53,9 +76,7 @@
         <div class="top3" id="top3"></div>
       </section>
 
-      <div class="note" id="note">
-        Hold a letter naturally. Do not contort your wrist to satisfy the app.
-      </div>
+      <div class="note" id="note">Hold a letter naturally for a moment. ASLingo will show its top three guesses.</div>
       <div class="errorBox hidden" id="errorBox"></div>
 
       <div class="controls">
@@ -63,10 +84,19 @@
         <button class="secondary" id="stop">Stop camera</button>
       </div>
 
+      <section class="testPrompt">
+        <p class="eyebrow">Best stress test</p>
+        <div class="chips">
+          <span>E</span><span>K</span><span>O</span><span>P</span><span>R</span><span>X</span>
+          <span>A</span><span>S</span><span>T</span><span>M</span><span>N</span>
+        </div>
+        <p>These are suggestions only — the recognizer is never told which one you're trying.</p>
+      </section>
+
       <section class="history">
         <div>
           <p class="eyebrow">Recent stable predictions</p>
-          <h3>What the model actually saw</h3>
+          <h3>What the model actually committed to</h3>
         </div>
         <div id="history"></div>
       </section>
@@ -74,9 +104,11 @@
 
     <section class="privacy">
       <b>Important</b>
-      <p>This is a model-comparison experiment, not an ASL correctness grade. Camera video is not uploaded. MediaPipe extracts landmarks locally; the neural classifier runs in your browser.</p>
+      <p>This is practice feedback, not proof that an ASL handshape is right or wrong. Camera frames are processed locally. Recognition model adapted from the MIT-licensed SignBridge project.</p>
+      <a href="https://github.com/mhmdtaha091/SignBridge" target="_blank" rel="noreferrer">SignBridge source</a>
     </section>
   </main>
+
   <script type="module" src="/neural-alphabet.js"></script>
 </body>
 </html>

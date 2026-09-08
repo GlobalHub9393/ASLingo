@@ -10,6 +10,7 @@
     "cf:preview": "npm run build && wrangler pages dev dist"
   },
   "dependencies": {
+    "@litertjs/core": "2.5.3",
     "@mediapipe/tasks-vision": "1.0.1",
     "@neondatabase/neon-js": "0.7.0-beta",
     "lucide-react": "1.41.0",

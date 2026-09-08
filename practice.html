@@ -21,33 +21,43 @@
     <section class="practice-hero">
       <span class="beta">ON-DEVICE BETA</span>
       <h2>Practice with your hands, not another quiz.</h2>
-      <p>These activities use MediaPipe hand tracking for instant feedback. Your camera video is not uploaded to ASLingo or Gemini.</p>
+      <p>Camera frames stay on your device. The experimental recognizers use MediaPipe landmarks and local model inference.</p>
+    </section>
+
+    <section class="practice-card featured">
+      <div class="icon">🧠</div>
+      <div class="copy">
+        <span class="tag">New · Model test</span>
+        <h2>Neural Alphabet Lab</h2>
+        <p>Blind recognition: ASLingo is not told which letter you are trying to make. A trained neural model predicts its top three letters from your hand landmarks.</p>
+      </div>
+      <button onclick="location.href='/neural-alphabet.html'">Try neural recognition →</button>
     </section>
 
     <section class="practice-card">
       <div class="icon">✋</div>
       <div class="copy">
-        <span class="tag">Alphabet</span>
+        <span class="tag">Rule-based beta</span>
         <h2>Camera Alphabet Check</h2>
-        <p>Sign A–Z. Hold each static letter above the confidence target to advance automatically. J and Z use guided motion tracing.</p>
+        <p>The current A–Z target checker. Keep this for comparison while we test the trained model approach.</p>
       </div>
-      <button onclick="location.href='/local-camera.html'">Start A–Z check →</button>
+      <button onclick="location.href='/local-camera.html'">Open current checker →</button>
     </section>
 
-    <section class="practice-card featured">
+    <section class="practice-card">
       <div class="icon">🤟</div>
       <div class="copy">
-        <span class="tag">New</span>
+        <span class="tag">Guided</span>
         <h2>Guided Fingerspelling</h2>
-        <p>Choose a word, then fingerspell it letter by letter. ASLingo auto-advances when each letter holds confidence long enough and gives you a word confidence score.</p>
+        <p>Choose a word and practice the letters in order. This still uses the current guided checker for now.</p>
       </div>
       <button onclick="location.href='/fingerspell.html'">Practice fingerspelling →</button>
     </section>
 
     <section class="coming-card">
-      <span>Later</span>
-      <b>Free fingerspelling recognition</b>
-      <p>The next version will try to recognize an unknown sequence instead of showing you the target letter first.</p>
+      <span>Goal</span>
+      <b>True free fingerspelling recognition</b>
+      <p>If the Neural Alphabet Lab is clearly better, the next step is a temporal sequence model that decodes letters and words without showing a target first.</p>
     </section>
   </main>
 </body>

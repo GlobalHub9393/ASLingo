@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#f4f7fb" />
+  <title>ASLingo Neural Alphabet Lab</title>
+  <link rel="stylesheet" href="/neural-alphabet.css" />
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <button class="back" onclick="location.href='/practice.html'" aria-label="Back">←</button>
+      <div>
+        <p class="eyebrow">ASLingo · Experimental</p>
+        <h1>Neural Alphabet Lab</h1>
+      </div>
+      <span class="local">On device</span>
+    </header>
+
+    <section class="hero">
+      <span class="badge">BLIND RECOGNITION</span>
+      <h2>Don’t tell ASLingo the answer.</h2>
+      <p>Make any static ASL letter. A trained neural network receives the 21 MediaPipe hand landmarks and predicts what it sees. This test does not use our hand-written A–Z rules.</p>
+    </section>
+
+    <section class="card" id="intro">
+      <h2>What we’re testing</h2>
+      <p class="muted">If this model can reliably tell apart shapes like E, K, O, P, R, X, A/S/T/M/N on both you and Kayla, we have a much better foundation for fingerspelling.</p>
+      <button class="primary" id="start">Start neural camera</button>
+      <p class="fine">Static letters only in this lab. J and Z need a temporal model later. The model is an MIT-licensed open-source ASL alphabet classifier and runs locally through LiteRT.js.</p>
+    </section>
+
+    <section class="card hidden" id="cameraCard">
+      <div class="cameraWrap">
+        <video id="camera" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="pill" id="status">Loading model…</div>
+        <div class="fps" id="fps">0 fps</div>
+      </div>
+
+      <section class="prediction">
+        <p class="eyebrow">Model prediction</p>
+        <div class="bigLetter" id="bigLetter">—</div>
+        <div class="bigConfidence" id="bigConfidence">Show your hand</div>
+
+        <div class="stability">
+          <span>Prediction stability</span>
+          <div class="bar"><i id="stableBar"></i></div>
+          <b id="stableText">—</b>
+        </div>
+
+        <div class="top3" id="top3"></div>
+      </section>
+
+      <div class="note" id="note">
+        Hold a letter naturally. Do not contort your wrist to satisfy the app.
+      </div>
+
+      <div class="controls">
+        <button class="secondary" id="clear">Clear history</button>
+        <button class="secondary" id="stop">Stop camera</button>
+      </div>
+
+      <section class="history">
+        <div>
+          <p class="eyebrow">Recent stable predictions</p>
+          <h3>What the model actually saw</h3>
+        </div>
+        <div id="history"></div>
+      </section>
+    </section>
+
+    <section class="privacy">
+      <b>Important</b>
+      <p>This is a model-comparison experiment, not an ASL correctness grade. Camera video is not uploaded. MediaPipe extracts landmarks locally; the neural classifier runs in your browser.</p>
+    </section>
+  </main>
+  <script type="module" src="/neural-alphabet.js"></script>
+</body>
+</html>

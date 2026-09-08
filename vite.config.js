@@ -14,6 +14,7 @@ export default defineConfig({
         localCamera: resolve(process.cwd(), 'local-camera.html'),
         practice: resolve(process.cwd(), 'practice.html'),
         fingerspell: resolve(process.cwd(), 'fingerspell.html'),
+        neuralAlphabet: resolve(process.cwd(), 'neural-alphabet.html'),
       },
     },
   },

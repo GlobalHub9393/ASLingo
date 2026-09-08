@@ -1,21 +1,44 @@
-ASLingo MediaPipe Comparative Tracker v4.1
+ASLingo Neural Alphabet Lab
 
 REPLACE:
-- hand-classifier.js
-- local-camera.js
+- package.json
+- vite.config.js
+- practice.html
 
-Why this patch exists:
-The first real v4 A-Z run exposed six clear false negatives:
-E, K, O, P, R, X.
+ADD:
+- neural-alphabet.html
+- neural-alphabet.css
+- neural-alphabet.js
 
-Changes:
-- E: broad bent-finger + fingertip/thumb gathering model, rather than one ideal curl.
-- K: stronger thumb-at-two-finger-base evidence; V is penalized when K thumb geometry is present.
-- O: stronger fingertip/thumb convergence; C/E are less likely to win when the O closes.
-- P: scores the same K core plus stronger downward orientation so it can beat K.
-- R: adds actual 2D finger-segment crossing detection, not only fingertip x-order.
-- X: accepts a broader anatomically hooked index range instead of demanding one exact PIP/DIP angle.
-- Feedback percentage is rounded (no more 77.0909090909%).
+What this is:
+- A SEPARATE proof-of-concept page. It does not replace the existing checker.
+- Blind recognition: the model is not told which letter you intend.
+- MediaPipe provides 21 hand landmarks.
+- A trained TFLite neural model predicts A-Z from the 42 normalized x/y landmark values.
+- LiteRT.js runs the model locally in the browser.
+- No Gemini.
+- No ASLingo server inference.
+- No personal calibration.
+- The page shows top-3 model predictions plus stability over recent frames.
 
-No personal calibration is added. The comparative / lookalike architecture remains intact.
-Fingerspelling automatically benefits because it imports hand-classifier.js.
+Model:
+Muhib-Mehdi/ASL-Recognition-System
+MIT licensed.
+The model is loaded at runtime from the project's public raw GitHub TFLite file.
+Its published pipeline uses wrist-relative 2D landmarks normalized by max absolute coordinate.
+ASLingo reproduces that preprocessing in the browser.
+
+Important:
+- Treat J/Z as unsupported for this STATIC lab even though the model has A-Z labels.
+  Motion letters need a temporal sequence model.
+- This page is specifically to answer one question:
+  "Does a trained model recognize your normal handshapes better than our hand-written rules?"
+- If yes, the next build should move toward a temporal fingerspelling model rather than more rule tuning.
+
+First test:
+E, K, O, P, R, X
+then A/S/T/M/N
+then U/V/W.
+Do NOT try to make the hand fit the model. Sign naturally and record what it predicts.
+
+Runtime: @litertjs/core 2.5.3 (current package at build time).

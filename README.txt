@@ -1,52 +1,21 @@
-ASLingo MediaPipe Comparative Tracker v4
+ASLingo MediaPipe Comparative Tracker v4.1
 
-REPLACE
-- local-camera.html
-- local-camera.js
-- fingerspell.js
-
-ADD
+REPLACE:
 - hand-classifier.js
+- local-camera.js
 
-No package.json or Vite changes are needed.
+Why this patch exists:
+The first real v4 A-Z run exposed six clear false negatives:
+E, K, O, P, R, X.
 
-WHAT CHANGED
-1. Removed personal calibration / “teach me that I’m right.”
-2. Palm-relative 3D landmark normalization:
-   - whole-hand rotation and hand size matter much less
-   - joint angles and anatomical relationships matter more
-3. Every target is compared with its closest lookalikes.
-   - A/S/M/N/T/E are a dedicated confusion family
-   - T/N/M use thumb position between successive finger lanes
-   - U/V/W, G/Q/L, H/U/R, K/P, etc. compete against one another
-4. Match confidence is reduced when a lookalike scores almost as well.
-   - a high raw fit cannot pass if the nearest competitor is essentially tied
-5. Fast pass:
-   - >=95 match confidence
-   - >=10 point lead over closest lookalike
-   - stable geometry
-   - ~150 ms / a few good frames, not one frame
-6. Normal pass:
-   - 90-94 gets a shorter hold
-   - 82-89 uses the normal hold
-   - brief bad frames get a grace period instead of resetting immediately
-7. Transition suppression:
-   - palm-relative geometry must settle before auto-pass
-8. J/Z:
-   - smoothed “virtual fingertip” using the whole final finger segment
-   - forgiving checkpoints, order matters more than exact dots
-   - brief tracking jitter/dropout does not instantly reset the trace
-9. Guided fingerspelling uses the same classifier.
-   - double letters require a small release before accepting the repeated letter
+Changes:
+- E: broad bent-finger + fingertip/thumb gathering model, rather than one ideal curl.
+- K: stronger thumb-at-two-finger-base evidence; V is penalized when K thumb geometry is present.
+- O: stronger fingertip/thumb convergence; C/E are less likely to win when the O closes.
+- P: scores the same K core plus stronger downward orientation so it can beat K.
+- R: adds actual 2D finger-segment crossing detection, not only fingertip x-order.
+- X: accepts a broader anatomically hooked index range instead of demanding one exact PIP/DIP angle.
+- Feedback percentage is rounded (no more 77.0909090909%).
 
-Important: “confidence” means confidence in the tracked target geometry versus
-lookalikes. It is not a linguistic grade or certification of ASL correctness.
-
-Recommended test order:
-A, S, T, M, N, E
-U, V, W
-X
-G, Q, L
-H, U, R
-K, P
-then full A-Z and NAME / STORE / WATER in fingerspelling.
+No personal calibration is added. The comparative / lookalike architecture remains intact.
+Fingerspelling automatically benefits because it imports hand-classifier.js.

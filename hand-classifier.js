@@ -64,6 +64,15 @@ function screenDirection(lm,a,b){
   return {x:dx/m,y:dy/m};
 }
 
+
+function orient2d(a,b,c){
+  return (b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
+}
+function segmentsCross2d(a,b,c,d){
+  const o1=orient2d(a,b,c),o2=orient2d(a,b,d),o3=orient2d(c,d,a),o4=orient2d(c,d,b);
+  return ((o1>0&&o2<0)||(o1<0&&o2>0)) && ((o3>0&&o4<0)||(o3<0&&o4>0));
+}
+
 export function makeFeatures(lm, handed='Right'){
   const L=localize(lm);
 
@@ -86,6 +95,11 @@ export function makeFeatures(lm, handed='Right'){
   const thumbIndexPip=ratio(4,6);
   const thumbMiddlePip=ratio(4,10);
   const thumbRingPip=ratio(4,14);
+  const thumbIndexMcp=ratio(4,5);
+  const thumbMiddleMcp=ratio(4,9);
+  const thumbRingMcp=ratio(4,13);
+  const thumbRing=ratio(4,16);
+  const thumbPinky=ratio(4,20);
 
   const idx=screenDirection(lm,5,8);
   const mid=screenDirection(lm,9,12);
@@ -125,17 +139,33 @@ export function makeFeatures(lm, handed='Right'){
   ];
 
   const indexHook=avg([
-    closeness(pipAngles[0],105,48),
-    closeness(dipAngles[0],118,58),
+    between(index,.18,.68,.22),
+    closeness(pipAngles[0],105,68),
+    closeness(dipAngles[0],115,78),
     1-middle,1-ring,1-pinky
   ]);
 
-  const crossIndexMiddle =
+  const tipSwap =
     Math.sign(L[8].x-L[12].x)!==Math.sign(L[5].x-L[9].x) ? 1 : 0;
+  const segmentCross =
+    segmentsCross2d(L[6],L[8],L[10],L[12]) ||
+    segmentsCross2d(L[7],L[8],L[11],L[12]) ? 1 : 0;
+  const crossIndexMiddle=Math.max(tipSwap,segmentCross);
 
-  const tipThumbAvg=avg([8,12,16,20].map(i=>ratio(4,i)));
+  const thumbFingerDistances=[thumbIndex,thumbMiddle,thumbRing,thumbPinky];
+  const tipThumbAvg=avg(thumbFingerDistances);
+  const thumbFingerGather=inverseRamp(tipThumbAvg,.34,.95);
+  const fingerTipGather=inverseRamp(
+    avg([
+      ratio(8,12),ratio(12,16),ratio(16,20),
+      ratio(8,16),ratio(12,20)
+    ]),
+    .30,1.15
+  );
   const tipPalmAvg=avg([8,12,16,20].map(i=>dist(L[i],{x:0,y:0,z:0})));
-  const curve=avg(ext.map(v=>closeness(v,.38,.46)));
+  // "Bent" is deliberately broad. E/X should not require one perfect joint angle.
+  const bent=avg(ext.map(v=>inverseRamp(v,.34,.78)));
+  const curve=avg(ext.map(v=>closeness(v,.34,.56)));
 
   const edge=Math.min(...lm.flatMap(p=>[p.x,p.y,1-p.x,1-p.y]));
   const visibility=clamp(edge/.045);
@@ -145,6 +175,8 @@ export function makeFeatures(lm, handed='Right'){
     thumb,index,middle,ring,pinky,ext,
     thumbIndex,thumbMiddle,indexMiddle,middleRing,ringPinky,
     thumbIndexPip,thumbMiddlePip,thumbRingPip,
+    thumbIndexMcp,thumbMiddleMcp,thumbRingMcp,thumbRing,thumbPinky,
+    thumbFingerGather,fingerTipGather,bent,
     horizontal,upward,downward,
     thumbAcross,thumbUp,laneT,laneN,laneM,indexSide,centerThumb,
     pipAngles,dipAngles,indexHook,crossIndexMiddle,
@@ -166,9 +198,14 @@ function rawScore(letter,f){
   const spreadIM=ramp(f.indexMiddle,.22,.72);
   const togetherIM=inverseRamp(f.indexMiddle,.18,.52);
   const spreadMR=ramp(f.middleRing,.18,.60);
-  const closeTI=closeness(f.thumbIndex,.18,.24);
-  const closeTM=closeness(f.thumbMiddle,.24,.32);
-  const thumbAtTwoBase=avg([closeness(f.thumbIndexPip,.25,.30),closeness(f.thumbMiddlePip,.25,.30)]);
+  const closeTI=closeness(f.thumbIndex,.20,.34);
+  const closeTM=closeness(f.thumbMiddle,.26,.40);
+  const thumbAtTwoBase=avg([
+    inverseRamp(f.thumbIndexPip,.18,.72),
+    inverseRamp(f.thumbMiddlePip,.18,.72),
+    inverseRamp(avg([f.thumbIndexMcp,f.thumbMiddleMcp]),.24,.78)
+  ]);
+  const kCore=clamp(.58*two+.18*spreadIM+.24*thumbAtTwoBase);
 
   switch(letter){
     case 'A':
@@ -176,11 +213,14 @@ function rawScore(letter,f){
     case 'B':
       return clamp(.74*four+.16*avg([togetherIM,inverseRamp(f.middleRing,.18,.50),inverseRamp(f.ringPinky,.16,.48)])+.10*(1-f.thumb));
     case 'C':
-      return clamp(.52*f.curve+.28*closeness(f.thumbIndex,.82,.62)+.20*ramp(f.tipThumbAvg,.42,.98));
+      return clamp((.52*f.curve+.28*closeness(f.thumbIndex,.82,.62)+.20*ramp(f.tipThumbAvg,.42,.98))*(.86+.14*ramp(f.thumbIndex,.36,.86)));
     case 'D':
       return clamp(.68*one+.20*closeTM+.12*(1-f.thumb));
     case 'E':
-      return clamp(.44*f.curve+.25*inverseRamp(f.tipThumbAvg,.30,.82)+.18*f.centerThumb+.13*(1-f.thumb));
+      // E is a compact curled hand with fingertips gathered toward the thumb/palm,
+      // not merely "a fist". Broad bend/gather terms tolerate normal finger lengths.
+      return clamp((.34*fist+.24*f.bent+.24*f.thumbFingerGather+.10*f.fingerTipGather+.08*f.centerThumb)*
+        (.82+.18*ramp(f.thumbIndex,.20,.55)));
     case 'F':
       return clamp(.62*P([0,1,1,1])+.28*closeTI+.10*f.thumb);
     case 'G':
@@ -192,7 +232,9 @@ function rawScore(letter,f){
     case 'J':
       return clamp(.80*pinkyOnly+.20*(1-f.thumb));
     case 'K':
-      return clamp(.55*two+.20*spreadIM+.25*thumbAtTwoBase);
+      // K and V share the two extended fingers; the thumb near the two-finger base
+      // is the defining K evidence. Upright/non-downward orientation breaks K/P.
+      return clamp(.72*kCore+.18*thumbAtTwoBase+.10*(1-f.downward));
     case 'L':
       return clamp(.62*one+.28*f.thumb+.10*f.upward);
     case 'M':
@@ -200,13 +242,18 @@ function rawScore(letter,f){
     case 'N':
       return clamp(.46*fist+.40*f.laneN+.14*f.thumbUp);
     case 'O':
-      return clamp(.44*f.curve+.34*closeTI+.14*closeTM+.08*inverseRamp(f.tipThumbAvg,.28,.75));
+      // O is fingertip/thumb convergence plus a rounded curl. This separates it
+      // from E, where the fingers curl inward but do not form the same closed ring.
+      return clamp(.30*f.curve+.30*closeTI+.18*closeTM+.14*f.thumbFingerGather+.08*f.fingerTipGather);
     case 'P':
-      return clamp(.50*two+.18*spreadIM+.18*thumbAtTwoBase+.14*f.downward);
+      // P is the K core rotated downward; orientation must meaningfully beat K.
+      return clamp(.58*kCore+.18*thumbAtTwoBase+.24*f.downward);
     case 'Q':
       return clamp(.52*one+.22*f.thumb+.26*f.downward);
     case 'R':
-      return clamp(.56*two+.22*togetherIM+.22*f.crossIndexMiddle);
+      // Crossing is decisive. Segment intersection catches perspective cases where
+      // fingertip x-order alone does not flip cleanly.
+      return clamp(.48*two+.18*togetherIM+.34*f.crossIndexMiddle);
     case 'S':
       return clamp(.50*fist+.28*f.thumbAcross+.22*f.centerThumb);
     case 'T':
@@ -214,11 +261,13 @@ function rawScore(letter,f){
     case 'U':
       return clamp(.62*two+.28*togetherIM+.10*f.upward);
     case 'V':
-      return clamp(.62*two+.28*spreadIM+.10*f.upward);
+      // A thumb sitting at the two-finger base is evidence for K, not V.
+      return clamp((.62*two+.28*spreadIM+.10*f.upward)*(1-.18*thumbAtTwoBase));
     case 'W':
       return clamp(.68*three+.17*spreadIM+.15*spreadMR);
     case 'X':
-      return clamp(.72*f.indexHook+.20*avg([1-f.middle,1-f.ring,1-f.pinky])+.08*(1-f.thumb));
+      // X is a hooked index, not one exact joint angle.
+      return clamp(.76*f.indexHook+.18*avg([1-f.middle,1-f.ring,1-f.pinky])+.06*(1-f.thumb));
     case 'Y':
       return clamp(.58*pinkyOnly+.34*f.thumb+.08*(1-f.index));
     case 'Z':

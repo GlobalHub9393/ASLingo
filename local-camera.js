@@ -125,7 +125,7 @@ function autoCheck(letter,e){
       let msg=!tracked?'Keep the full hand visible.'
         :!stable?'Hold the handshape for a moment — ASLingo is waiting for the transition to finish.'
         :e.margin<5?`${letter} is too close to ${e.competitor||'a lookalike'}. ${specificHint(letter,e.competitor)}`
-        :`Match confidence ${candidate}% — aim for ${threshold}% or better.`;
+        :`Match confidence ${Math.round(candidate)}% — aim for ${threshold}% or better.`;
       resetHold(msg);
     }
     return;

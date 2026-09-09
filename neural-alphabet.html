@@ -11,42 +11,28 @@
   <main class="shell">
     <header class="topbar">
       <button class="back" onclick="location.href='/practice.html'" aria-label="Back">←</button>
-      <div>
-        <p class="eyebrow">ASLingo · Experimental</p>
-        <h1>Neural Alphabet Lab</h1>
-      </div>
+      <div><p class="eyebrow">ASLingo · Experimental</p><h1>Neural Alphabet Lab</h1></div>
       <span class="local">On device</span>
     </header>
 
     <section class="hero">
-      <span class="badge">SIGNBRIDGE MLP · BLIND RECOGNITION</span>
-      <h2>Just sign. ASLingo guesses.</h2>
-      <p>No target letter is supplied to the recognizer. MediaPipe finds the hand; a trained 24-letter neural model decides which static ASL handshape it sees.</p>
+      <span class="badge">LIVE LEARNING · BLIND RECOGNITION</span>
+      <h2>Sign it. Correct it. Make ASLingo better.</h2>
+      <p>The base neural model makes the first guess. Your corrections become landmark training examples — no photo or video is saved.</p>
     </section>
 
     <section class="card" id="intro">
       <div class="modelStrip">
-        <div>
-          <span>MODEL</span>
-          <b>24 static letters</b>
-        </div>
-        <div>
-          <span>VALIDATION</span>
-          <b>94.7%</b>
-        </div>
-        <div>
-          <span>VIDEO UPLOAD</span>
-          <b>None</b>
-        </div>
+        <div><span>BASE MODEL</span><b>24 static letters</b></div>
+        <div><span>LEARNING</span><b>Device + community</b></div>
+        <div><span>VIDEO SAVED</span><b>Never</b></div>
       </div>
-
-      <h2>What we're testing</h2>
-      <p class="muted">Make a letter naturally. Don't twist your hand until the app agrees. We want to know whether a trained model handles your normal E, K, O, P, R, X and the A/S/T/M/N family better than our hand-written rules.</p>
-
+      <h2>Training mode</h2>
+      <p class="muted">Sign naturally. If ASLingo is right, tap <b>This is ___</b>. If it is wrong, choose the letter you actually signed. That landmark example is remembered immediately on this device and, when signed in, added to ASLingo's shared training memory.</p>
+      <div class="guardrail"><b>Global learning has a guardrail.</b><span>One person's correction is stored globally, but it does not override everybody's recognizer by itself. Shared corrections only influence recognition when nearby examples from multiple contributors agree.</span></div>
       <button class="primary" id="start">Start neural camera</button>
       <div class="errorBox hidden" id="introError"></div>
-
-      <p class="fine"><b>J and Z are intentionally excluded.</b> They are motion letters and need a temporal recognizer. This page is a static-handshape test first.</p>
+      <p class="fine"><b>J and Z are intentionally excluded.</b> They require a temporal motion recognizer.</p>
     </section>
 
     <section class="card hidden" id="cameraCard">
@@ -56,59 +42,53 @@
         <div class="pill" id="status">Starting…</div>
         <div class="fps" id="fps">0 fps</div>
       </div>
-
-      <div class="trackerMeta">
-        <span id="handMeta">Waiting for hand…</span>
-        <span id="modelMeta">SignBridge model</span>
-      </div>
+      <div class="trackerMeta"><span id="handMeta">Waiting for hand…</span><span id="modelMeta">SignBridge model</span></div>
 
       <section class="prediction">
         <p class="eyebrow">ASLingo sees</p>
         <div class="bigLetter" id="bigLetter">—</div>
-        <div class="bigConfidence" id="bigConfidence">Show your signing hand</div>
-
-        <div class="stability">
-          <span>Prediction stability</span>
-          <div class="bar"><i id="stableBar"></i></div>
-          <b id="stableText">—</b>
-        </div>
-
+        <div class="recognitionSignal" id="recognitionSignal">Show your signing hand</div>
+        <div class="stability"><span>Prediction stability</span><div class="bar"><i id="stableBar"></i></div><b id="stableText">—</b></div>
         <div class="top3" id="top3"></div>
       </section>
 
-      <div class="note" id="note">Hold a letter naturally for a moment. ASLingo will show its top three guesses.</div>
-      <div class="errorBox hidden" id="errorBox"></div>
+      <section class="feedbackPanel hidden" id="feedbackPanel">
+        <p>What did you actually sign?</p>
+        <div class="feedbackButtons">
+          <button class="correctButton" id="confirmBtn">✓ This is —</button>
+          <button class="wrongButton" id="changeBtn">Different letter…</button>
+        </div>
+      </section>
 
-      <div class="controls">
-        <button class="secondary" id="clear">Clear history</button>
-        <button class="secondary" id="stop">Stop camera</button>
+      <section class="letterPicker hidden" id="letterPicker">
+        <div class="pickerHead"><div><p class="eyebrow">Correct ASLingo</p><h3>This is…</h3></div><button id="closePicker" aria-label="Close">×</button></div>
+        <div class="letterGrid" id="letterGrid"></div>
+        <p class="fine">J and Z are not available in the static recognizer.</p>
+      </section>
+
+      <div class="learningStrip" id="learningStrip">
+        <div><span>THIS DEVICE</span><b id="localCount">0 examples</b></div>
+        <div><span>COMMUNITY MEMORY</span><b id="communityCount">Loading…</b></div>
+        <div><span>CURRENT ASSIST</span><b id="assistState">Base model</b></div>
       </div>
 
+      <div class="note" id="note">Hold a letter naturally for a moment. ASLingo will show its top three guesses.</div>
+      <div class="toast hidden" id="toast"></div>
+      <div class="errorBox hidden" id="errorBox"></div>
+
+      <div class="controls"><button class="secondary" id="clear">Clear recent history</button><button class="secondary" id="stop">Stop camera</button></div>
+
       <section class="testPrompt">
-        <p class="eyebrow">Best stress test</p>
-        <div class="chips">
-          <span>E</span><span>K</span><span>O</span><span>P</span><span>R</span><span>X</span>
-          <span>A</span><span>S</span><span>T</span><span>M</span><span>N</span>
-        </div>
-        <p>These are suggestions only — the recognizer is never told which one you're trying.</p>
+        <p class="eyebrow">High-value training</p>
+        <div class="chips"><span>A</span><span>S</span><span>T</span><span>M</span><span>N</span><span>B</span><span>L</span><span>E</span><span>K</span><span>P</span><span>O</span><span>C</span></div>
+        <p>These are only suggestions. The recognizer is never told which letter you're attempting until you give feedback.</p>
       </section>
 
-      <section class="history">
-        <div>
-          <p class="eyebrow">Recent stable predictions</p>
-          <h3>What the model actually committed to</h3>
-        </div>
-        <div id="history"></div>
-      </section>
+      <section class="history"><div><p class="eyebrow">Recent stable predictions</p><h3>What ASLingo committed to</h3></div><div id="history"></div></section>
     </section>
 
-    <section class="privacy">
-      <b>Important</b>
-      <p>This is practice feedback, not proof that an ASL handshape is right or wrong. Camera frames are processed locally. Recognition model adapted from the MIT-licensed SignBridge project.</p>
-      <a href="https://github.com/mhmdtaha091/SignBridge" target="_blank" rel="noreferrer">SignBridge source</a>
-    </section>
+    <section class="privacy"><b>What gets shared?</b><p>63 normalized hand-landmark numbers, the model's scores, your correction, device class, and tracking quality. No camera frame, photo, or video is uploaded.</p><a href="https://github.com/mhmdtaha091/SignBridge" target="_blank" rel="noreferrer">SignBridge source</a></section>
   </main>
-
   <script type="module" src="/neural-alphabet.js"></script>
 </body>
 </html>

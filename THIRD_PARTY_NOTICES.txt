@@ -1,13 +1,10 @@
 THIRD-PARTY NOTICE — SignBridge
 
-ASLingo Neural Alphabet Lab v2 uses/adapts the browser-side ASL recognition
+ASLingo Neural Alphabet Lab uses/adapts the browser-side ASL recognition
 architecture and bundled ASL static-letter model from:
-
-SignBridge
 https://github.com/mhmdtaha091/SignBridge
 
 MIT License
-
 Copyright (c) 2026 SignBridge contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -27,9 +24,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-Implementation note:
-- Static ASL model has 24 classes: A–Y excluding J and Z.
-- SignBridge reports 94.7% held-out validation accuracy for this model.
-- The browser feature vector is 63 values: 21 MediaPipe hand landmarks × XYZ,
-  normalized by wrist origin, wrist-to-middle-MCP scale, and handedness mirroring.

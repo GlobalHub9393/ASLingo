@@ -1,34 +1,67 @@
-ASLingo Neural Alphabet Lab v3 — Live Learning
+ASLingo Camera Geometry Fix v3.1
 
 REPLACE:
 - neural-alphabet.html
-- neural-alphabet.css
+
+ADD:
+- neural-alphabet-entry.js
+- camera-geometry-fix.js
+
+DO NOT REPLACE:
 - neural-alphabet.js
+- neural-alphabet.css
+- package.json
+- vite.config.js
+- Neon / database files
 
-DATABASE:
-- ASLingo-Live-Learning-Neon-Migration.sql
+WHAT THIS FIXES
+The current phone CSS forces the visible camera to 4:3 while the SignBridge
+model was specifically trained with MediaPipe input letterboxed to 16:9.
+The current video also uses object-fit: cover, which can crop the image while
+the landmark canvas still maps 0..1 across the full element.
 
-No package.json change.
-No vite.config.js change.
-No build-flat.mjs change.
+This build makes the camera pipeline mathematically consistent:
 
-NEW:
-- “This is X” confirmation button.
-- “Different letter…” correction picker.
-- Each correction stores averaged 63-value MediaPipe landmarks, base model scores,
-  predicted/actual labels, handedness, tracking quality, device class, browser,
-  and camera dimensions. No image or video is stored.
-- Local corrections affect recognition immediately and persist on that device.
-- Signed-in corrections are stored in Neon for ASLingo’s global training pool.
-- Community memory only influences recognition when nearby examples have at least
-  3 supporting samples from at least 2 distinct contributors.
-- Same device class gets only a small 8% weight bump; it is not the deciding factor.
-- Recent landmark frames are averaged to reduce one-frame MediaPipe jitter.
-- Raw softmax is no longer called “confidence”; UI says Strong / Moderate / Uncertain.
+RAW PHONE CAMERA (whatever iOS actually returns)
+  -> no stretch
+  -> no crop
+  -> centered letterbox into 960x540 / 16:9
+  -> MediaPipe HandLandmarker
+  -> unchanged SignBridge model
 
-BEST FIRST TRAINING SET:
-A S T M N
-B L
-E
-K P
-O C
+The visible phone camera is also 16:9 with object-fit: contain, so it shows the
+same geometry that MediaPipe receives. The blue overlay therefore shares the
+same normalized coordinate system.
+
+A diagnostic line is added beneath the tracker, for example:
+Camera geometry: 1280x960 (4:3) -> 960x540 (16:9) · 120px side bars · no crop
+
+WHY 16:9, NOT "WHATEVER THE PHONE RETURNS"
+SignBridge's own training extractor explicitly letterboxes its training images
+to 16:9 because MediaPipe normalizes x by width and y by height, which makes
+the feature geometry aspect-ratio dependent. Matching the training geometry is
+more important than making the camera card fill the phone screen.
+
+THIS BUILD DOES NOT CHANGE
+- neural network weights
+- recognition thresholds
+- A/S/T/M/N logic
+- adaptive local memory
+- community memory
+- feedback / "This is X"
+- Neon
+- J/Z
+
+TEST ORDER
+1. First look ONLY at the overlay:
+   - wrist dot should sit on wrist
+   - MCP/palm connections should remain in the palm
+   - fingertips should land on fingertips
+2. Screenshot the diagnostic line.
+3. Then test:
+   B / L
+   A / S / T / M / N
+   K / P
+   O / C
+
+Do not add lots of corrections until the overlay itself looks trustworthy.

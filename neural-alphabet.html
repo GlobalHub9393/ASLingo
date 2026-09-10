@@ -89,6 +89,8 @@
 
     <section class="privacy"><b>What gets shared?</b><p>63 normalized hand-landmark numbers, the model's scores, your correction, device class, and tracking quality. No camera frame, photo, or video is uploaded.</p><a href="https://github.com/mhmdtaha091/SignBridge" target="_blank" rel="noreferrer">SignBridge source</a></section>
   </main>
-  <script type="module" src="/neural-alphabet.js"></script>
+
+  <!-- Camera geometry must patch MediaPipe BEFORE the current neural app loads. -->
+  <script type="module" src="/neural-alphabet-entry.js"></script>
 </body>
 </html>

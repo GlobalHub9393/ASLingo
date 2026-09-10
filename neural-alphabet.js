@@ -12,8 +12,13 @@ const MODEL_URLS = [
 
 const MODEL_CACHE_KEY = 'aslingo-signbridge-asl-model-v1';
 const LOCAL_MEMORY_KEY = 'aslingo-recognition-local-memory-v1';
-const MODEL_VERSION = 'signbridge-static-v2+aslingo-live-memory-v1';
+const MODEL_VERSION = 'signbridge-static-v2+aslingo-hybrid-v3.2';
 const STATIC_LABELS = 'ABCDEFGHIKLMNOPQRSTUVWXY'.split('');
+const CONFUSION_FAMILIES = [
+  { id: 'urv', label: 'U/R/V specialist', letters: ['U', 'R', 'V'] },
+  { id: 'fist', label: 'A/S/T/M/N specialist', letters: ['A', 'S', 'T', 'M', 'N'] },
+  { id: 'ceob', label: 'C/O/E/B specialist', letters: ['C', 'O', 'E', 'B'] },
+];
 const SESSION_ID = crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 const $ = (id) => document.getElementById(id);
@@ -74,6 +79,7 @@ let currentTrackingScore = 0;
 let appUser = null;
 let backendReady = false;
 let localSamples = loadLocalSamples();
+let accountSamples = [];
 let communitySamples = [];
 let lastCommunityLoad = 0;
 let communityTimer = null;
@@ -156,6 +162,251 @@ function blend(a, b, strength) {
   const w = clamp(strength);
   for (let i = 0; i < a.length; i++) out[i] = a[i] * (1 - w) + b[i] * w;
   return normalizeDistribution(out);
+}
+
+
+function point3(features, index) {
+  return {
+    x: Number(features[index * 3] || 0),
+    y: Number(features[index * 3 + 1] || 0),
+    z: Number(features[index * 3 + 2] || 0),
+  };
+}
+
+function dist3(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+}
+
+function dist2(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function gauss(value, center, width) {
+  const w = Math.max(width, 1e-6);
+  const z = (value - center) / w;
+  return Math.exp(-0.5 * z * z);
+}
+
+function geometricMean(values) {
+  if (!values.length) return 0;
+  let sum = 0;
+  for (const value of values) sum += Math.log(Math.max(Number(value) || 0, 1e-5));
+  return Math.exp(sum / values.length);
+}
+
+function familyForProbabilities(probs) {
+  if (!model || !probs) return null;
+
+  const ranked = model.labels
+    .map((letter, i) => ({ letter, score: Number(probs[i] || 0) }))
+    .sort((a, b) => b.score - a.score);
+
+  for (const family of CONFUSION_FAMILIES) {
+    const familyTop3 = ranked.slice(0, 3).filter((x) => family.letters.includes(x.letter));
+    const familyMass = family.letters.reduce((sum, letter) => {
+      const idx = model.labels.indexOf(letter);
+      return sum + (idx >= 0 ? Number(probs[idx] || 0) : 0);
+    }, 0);
+
+    if (
+      family.letters.includes(ranked[0]?.letter) ||
+      familyTop3.length >= 2 ||
+      familyMass >= 0.42
+    ) {
+      return family;
+    }
+  }
+
+  return null;
+}
+
+function distributionForFamily(scores, family) {
+  const out = new Float32Array(model.labels.length);
+  for (const letter of family.letters) {
+    const idx = model.labels.indexOf(letter);
+    if (idx >= 0) out[idx] = Math.max(0, Number(scores[letter] || 0));
+  }
+  return normalizeDistribution(out);
+}
+
+/*
+  U/R/V specialist.
+  The ASLingo feedback data shows three very clean landmark patterns:
+  R reverses index/middle tip x-order (crossing), U is uncrossed + close,
+  and V is uncrossed + wide.
+*/
+function urvGeometry(features) {
+  const indexTip = point3(features, 8);
+  const middleTip = point3(features, 12);
+  const indexMcp = point3(features, 5);
+  const middleMcp = point3(features, 9);
+
+  const tipGap = dist2(indexTip, middleTip);
+  const tipDx = indexTip.x - middleTip.x;
+  const mcpDx = indexMcp.x - middleMcp.x;
+  const crossProduct = tipDx * mcpDx;
+
+  const scores = {
+    R: geometricMean([
+      gauss(crossProduct, -0.0045, 0.0065),
+      gauss(tipGap, 0.045, 0.055),
+    ]),
+    U: geometricMean([
+      gauss(crossProduct, 0.009, 0.009),
+      gauss(tipGap, 0.12, 0.07),
+    ]),
+    V: geometricMean([
+      gauss(Math.max(crossProduct, 0), 0.040, 0.022),
+      gauss(tipGap, 0.35, 0.14),
+    ]),
+  };
+
+  const ranked = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+
+  return {
+    familyId: 'urv',
+    distribution: distributionForFamily(scores, CONFUSION_FAMILIES[0]),
+    winnerLabel: ranked[0][0],
+    confidence: ranked[0][1] - ranked[1][1],
+    debug: { tipGap, crossProduct },
+  };
+}
+
+/*
+  A/S/T/M/N specialist.
+  This does not try to identify a letter from scratch. It only compares thumb
+  placement after the neural model has already placed the hand in this family.
+*/
+function fistGeometry(features) {
+  const thumb = point3(features, 4);
+  const indexPip = point3(features, 6);
+  const middlePip = point3(features, 10);
+  const ringPip = point3(features, 14);
+  const pinkyPip = point3(features, 18);
+
+  const di = dist3(thumb, indexPip);
+  const dm = dist3(thumb, middlePip);
+  const dr = dist3(thumb, ringPip);
+  const dp = dist3(thumb, pinkyPip);
+
+  const scores = {
+    A: geometricMean([
+      gauss(thumb.x, 0.66, 0.24),
+      gauss(thumb.z, 0.045, 0.11),
+      gauss(di, 0.19, 0.10),
+      gauss(dm, 0.36, 0.15),
+    ]),
+    T: geometricMean([
+      gauss(thumb.x, 0.40, 0.18),
+      gauss(thumb.z, -0.14, 0.12),
+      gauss(di, 0.16, 0.10),
+      gauss(dm, 0.16, 0.10),
+      gauss(dr, 0.35, 0.16),
+    ]),
+    S: geometricMean([
+      gauss(thumb.x, 0.25, 0.17),
+      gauss(thumb.z, -0.16, 0.12),
+      gauss(dm, 0.125, 0.09),
+      gauss(dr, 0.18, 0.11),
+      gauss(dp, 0.32, 0.18),
+    ]),
+    N: geometricMean([
+      gauss(thumb.x, 0.02, 0.16),
+      gauss(thumb.z, -0.13, 0.12),
+      gauss(dr, 0.11, 0.075),
+      gauss(dp, 0.31, 0.16),
+    ]),
+    M: geometricMean([
+      gauss(thumb.x, 0.08, 0.16),
+      gauss(thumb.z, -0.14, 0.12),
+      gauss(dr, 0.205, 0.11),
+      gauss(dp, 0.15, 0.085),
+    ]),
+  };
+
+  const family = CONFUSION_FAMILIES[1];
+  const ranked = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+
+  return {
+    familyId: 'fist',
+    distribution: distributionForFamily(scores, family),
+    winnerLabel: ranked[0][0],
+    confidence: ranked[0][1] - ranked[1][1],
+    debug: { di, dm, dr, dp, thumbX: thumb.x, thumbZ: thumb.z },
+  };
+}
+
+function familyGeometry(family, features) {
+  if (!family) return null;
+  if (family.id === 'urv') return urvGeometry(features);
+  if (family.id === 'fist') return fistGeometry(features);
+  return null;
+}
+
+function familyVoteFromSamples(samples, features, family, { community = false } = {}) {
+  if (!family || !samples?.length) return null;
+  const device = detectDeviceInfo().deviceClass;
+  const near = [];
+
+  for (const sample of samples) {
+    if (!family.letters.includes(sample.label)) continue;
+    if (!Array.isArray(sample.features) || sample.features.length !== 63) continue;
+
+    const distance = rmse(features, sample.features);
+    if (!Number.isFinite(distance) || distance > 0.60) continue;
+
+    let weight = Math.exp(-(distance * distance) / (2 * 0.24 * 0.24));
+    weight *= clamp(Number(sample.sample_quality ?? sample.quality ?? 0.85), 0.35, 1);
+
+    if (sample.feedback_kind === 'corrected') weight *= 1.35;
+    if (sample.device_class && sample.device_class === device) weight *= 1.08;
+
+    near.push({ ...sample, distance, weight });
+  }
+
+  near.sort((a, b) => a.distance - b.distance);
+  const chosen = near.slice(0, community ? 24 : 16);
+  if (!chosen.length) return null;
+
+  const scores = new Map();
+  const counts = new Map();
+  const contributors = new Map();
+
+  for (const row of chosen) {
+    scores.set(row.label, (scores.get(row.label) || 0) + row.weight);
+    counts.set(row.label, (counts.get(row.label) || 0) + 1);
+
+    if (community && row.contributor_token) {
+      if (!contributors.has(row.label)) contributors.set(row.label, new Set());
+      contributors.get(row.label).add(row.contributor_token);
+    }
+  }
+
+  const ranked = [...scores.entries()].sort((a, b) => b[1] - a[1]);
+  if (!ranked.length) return null;
+
+  const distribution = new Float32Array(model.labels.length);
+  for (const [label, score] of scores.entries()) {
+    const idx = model.labels.indexOf(label);
+    if (idx >= 0) distribution[idx] = score;
+  }
+
+  const winnerLabel = ranked[0][0];
+  const winnerCount = counts.get(winnerLabel) || 0;
+  const uniqueContributors = community
+    ? (contributors.get(winnerLabel)?.size || 0)
+    : 1;
+  const totalScore = ranked.reduce((sum, row) => sum + row[1], 0) || 1;
+
+  return {
+    distribution: normalizeDistribution(distribution),
+    winnerLabel,
+    winnerCount,
+    uniqueContributors,
+    bestDistance: chosen[0].distance,
+    agreement: ranked[0][1] / totalScore,
+    neighbors: chosen,
+  };
 }
 
 function showToast(message) {
@@ -324,29 +575,123 @@ function applyAdaptiveMemory(baseProbs, features) {
   let finalProbs = Float32Array.from(baseProbs);
   let personalStrength = 0;
   let communityStrength = 0;
-  const personalVote = voteFromSamples(localSamples, features);
+  let familyStrength = 0;
+  let geometryStrength = 0;
 
-  if (personalVote && personalVote.bestDistance < 0.32) {
-    personalStrength = clamp((0.34 - personalVote.bestDistance) / 0.22, 0, 1) * 0.48;
-    if (personalVote.winnerCount >= 2) personalStrength = Math.min(0.55, personalStrength + 0.07);
+  const personalVote = voteFromSamples(localSamples, features);
+  if (personalVote && personalVote.bestDistance < 0.34) {
+    personalStrength =
+      clamp((0.36 - personalVote.bestDistance) / 0.24, 0, 1) * 0.50;
+    if (personalVote.winnerCount >= 2) {
+      personalStrength = Math.min(0.58, personalStrength + 0.08);
+    }
     finalProbs = blend(finalProbs, personalVote.distribution, personalStrength);
   }
 
-  const candidateCommunity = voteFromSamples(communitySamples, features, { community: true });
+  const family = familyForProbabilities(baseProbs);
+  const geometry = familyGeometry(family, features);
+
+  const accountPool = accountSamples.length ? accountSamples : localSamples;
+  const familyVote = familyVoteFromSamples(accountPool, features, family);
+
+  if (familyVote && familyVote.bestDistance < 0.50) {
+    const closeness =
+      clamp((0.52 - familyVote.bestDistance) / 0.34, 0, 1);
+
+    familyStrength = 0.24 + closeness * 0.34;
+    if (familyVote.winnerCount >= 2) familyStrength += 0.10;
+    if (familyVote.winnerCount >= 4) familyStrength += 0.08;
+    if (familyVote.agreement >= 0.72) familyStrength += 0.06;
+
+    const cap =
+      familyVote.winnerCount >= 4
+        ? 0.82
+        : familyVote.winnerCount >= 2
+          ? 0.72
+          : 0.45;
+
+    familyStrength = Math.min(cap, familyStrength);
+    finalProbs = blend(finalProbs, familyVote.distribution, familyStrength);
+  }
+
+  if (geometry && geometry.confidence > 0.03) {
+    if (family?.id === 'urv') {
+      geometryStrength =
+        clamp(0.58 + geometry.confidence * 0.55, 0.58, 0.82);
+    } else if (family?.id === 'fist') {
+      geometryStrength =
+        clamp(0.38 + geometry.confidence * 0.50, 0.38, 0.62);
+    }
+
+    if (
+      familyVote &&
+      familyVote.winnerLabel === geometry.winnerLabel
+    ) {
+      geometryStrength = Math.min(0.86, geometryStrength + 0.08);
+    }
+
+    finalProbs = blend(
+      finalProbs,
+      geometry.distribution,
+      geometryStrength,
+    );
+  }
+
+  const candidateCommunity = family
+    ? familyVoteFromSamples(
+        communitySamples,
+        features,
+        family,
+        { community: true },
+      )
+    : voteFromSamples(
+        communitySamples,
+        features,
+        { community: true },
+      );
+
   const communityCorroborated =
     candidateCommunity &&
-    candidateCommunity.bestDistance < 0.32 &&
+    candidateCommunity.bestDistance < (family ? 0.46 : 0.32) &&
     candidateCommunity.winnerCount >= 3 &&
     candidateCommunity.uniqueContributors >= 2;
 
-  const communityVote = communityCorroborated ? candidateCommunity : null;
+  const communityVote =
+    communityCorroborated ? candidateCommunity : null;
+
   if (communityVote) {
-    communityStrength = clamp((0.34 - communityVote.bestDistance) / 0.20, 0, 1) * 0.34;
-    if (communityVote.uniqueContributors >= 3) communityStrength = Math.min(0.42, communityStrength + 0.06);
-    finalProbs = blend(finalProbs, communityVote.distribution, communityStrength);
+    communityStrength =
+      clamp(
+        ((family ? 0.48 : 0.34) - communityVote.bestDistance) /
+          (family ? 0.30 : 0.20),
+        0,
+        1,
+      ) * (family ? 0.40 : 0.34);
+
+    if (communityVote.uniqueContributors >= 3) {
+      communityStrength =
+        Math.min(0.48, communityStrength + 0.07);
+    }
+
+    finalProbs = blend(
+      finalProbs,
+      communityVote.distribution,
+      communityStrength,
+    );
   }
 
-  return { probs: finalProbs, personalStrength, communityStrength, personalVote, communityVote };
+  return {
+    probs: finalProbs,
+    personalStrength,
+    communityStrength,
+    familyStrength,
+    geometryStrength,
+    personalVote,
+    communityVote,
+    familyVote,
+    family,
+    geometry,
+  };
 }
 
 async function resolveUser() {
@@ -357,6 +702,39 @@ async function resolveUser() {
     appUser = null;
   }
   return appUser;
+}
+
+async function loadAccountSamples() {
+  if (!appUser) {
+    accountSamples = [];
+    return;
+  }
+
+  try {
+    const res = await neon
+      .from('recognition_feedback')
+      .select('id,actual_label,predicted_label,feedback_kind,features,sample_quality,device_class,model_version,created_at')
+      .order('created_at', { ascending: false })
+      .limit(800);
+
+    if (res.error) throw res.error;
+
+    accountSamples = (res.data || [])
+      .filter(
+        (x) =>
+          STATIC_LABELS.includes(x.actual_label) &&
+          Array.isArray(x.features) &&
+          x.features.length === 63,
+      )
+      .map((x) => ({
+        ...x,
+        label: x.actual_label,
+        features: x.features.map(Number),
+      }));
+  } catch (err) {
+    accountSamples = [];
+    console.warn('Account recognition memory unavailable:', err);
+  }
 }
 
 async function loadCommunitySamples(force = false) {
@@ -404,6 +782,9 @@ async function saveFeedback(actualLabel, feedbackKind) {
 
   const localRow = {
     label: actualLabel,
+    predicted_label: snap.predictedLabel,
+    feedback_kind: feedbackKind,
+    model_version: MODEL_VERSION,
     features: Array.from(snap.features),
     quality: snap.sampleQuality,
     sample_quality: snap.sampleQuality,
@@ -454,7 +835,10 @@ async function saveFeedback(actualLabel, feedbackKind) {
     const res = await neon.from('recognition_feedback').insert(payload).select('id');
     if (res.error) throw res.error;
     backendReady = true;
-    await loadCommunitySamples(true);
+    await Promise.all([
+      loadAccountSamples(),
+      loadCommunitySamples(true),
+    ]);
     showToast(wasRight ? `Saved: ${actualLabel}. Added to shared ASLingo training memory.` : `Correction saved globally: ${snap.predictedLabel} → ${actualLabel}.`);
   } catch (err) {
     backendReady = false;
@@ -515,8 +899,34 @@ function renderPrediction(probabilities, baseProbs, features, suppliedStability 
   const baseRanked = rankedPredictions(baseProbs || probabilities);
   const baseFirst = baseRanked[0];
   let assist = 'Base model';
-  if (memoryInfo?.communityStrength > 0.02 && memoryInfo?.communityVote) assist = `Community assist: ${memoryInfo.communityVote.winnerLabel}`;
-  else if (memoryInfo?.personalStrength > 0.02 && memoryInfo?.personalVote) assist = `Device memory: ${memoryInfo.personalVote.winnerLabel}`;
+  if (memoryInfo?.geometryStrength > 0.02 && memoryInfo?.geometry) {
+    const memoryLabel = memoryInfo?.familyVote?.winnerLabel;
+    const agrees =
+      memoryLabel &&
+      memoryLabel === memoryInfo.geometry.winnerLabel;
+
+    assist = agrees
+      ? `Hybrid ${memoryInfo.family?.label || 'specialist'}: ${memoryInfo.geometry.winnerLabel}`
+      : `${memoryInfo.family?.label || 'Specialist'}: ${memoryInfo.geometry.winnerLabel}`;
+  } else if (
+    memoryInfo?.familyStrength > 0.02 &&
+    memoryInfo?.familyVote
+  ) {
+    assist =
+      `Account family memory: ${memoryInfo.familyVote.winnerLabel}`;
+  } else if (
+    memoryInfo?.communityStrength > 0.02 &&
+    memoryInfo?.communityVote
+  ) {
+    assist =
+      `Community assist: ${memoryInfo.communityVote.winnerLabel}`;
+  } else if (
+    memoryInfo?.personalStrength > 0.02 &&
+    memoryInfo?.personalVote
+  ) {
+    assist =
+      `Device memory: ${memoryInfo.personalVote.winnerLabel}`;
+  }
   assistState.textContent = assist;
 
   const sampleQuality = clamp(currentTrackingScore * 0.55 + stability * 0.45, 0, 1);
@@ -652,10 +1062,19 @@ async function begin() {
     cameraCard.classList.remove('hidden');
     resizeCanvas();
     renderLearningMeta();
-    status.textContent = 'Live learning recognition';
+    status.textContent = 'Hybrid live learning';
     lastFrameAt = performance.now();
-    loadCommunitySamples(true);
-    communityTimer = setInterval(() => loadCommunitySamples(true), 45000);
+
+    Promise.all([
+      loadAccountSamples(),
+      loadCommunitySamples(true),
+    ]);
+
+    communityTimer = setInterval(() => {
+      loadAccountSamples();
+      loadCommunitySamples(true);
+    }, 45000);
+
     loop();
   } catch (err) {
     console.error(err);

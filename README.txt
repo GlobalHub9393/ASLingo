@@ -1,67 +1,80 @@
-ASLingo Camera Geometry Fix v3.1
+ASLingo V3.2 — Hybrid Recognition
 
-REPLACE:
-- neural-alphabet.html
+UPLOAD THESE FILES TO THE REPO ROOT
+- neural-alphabet.js        (replace)
+- neural-alphabet.html      (replace)
+- neural-alphabet-entry.js  (replace/add)
+- camera-geometry-fix.js    (replace/add)
 
-ADD:
-- neural-alphabet-entry.js
-- camera-geometry-fix.js
+No package.json change.
+No Vite change.
+No Neon migration.
 
-DO NOT REPLACE:
-- neural-alphabet.js
-- neural-alphabet.css
-- package.json
-- vite.config.js
-- Neon / database files
+WHAT V3.2 CHANGES
 
-WHAT THIS FIXES
-The current phone CSS forces the visible camera to 4:3 while the SignBridge
-model was specifically trained with MediaPipe input letterboxed to 16:9.
-The current video also uses object-fit: cover, which can crop the image while
-the landmark canvas still maps 0..1 across the full element.
+1. Keeps the V3.1 camera-geometry pipeline
+   - phone camera can return 4:3 or another aspect ratio
+   - frame is letterboxed, never stretched/cropped
+   - MediaPipe receives canonical 960x540 / 16:9 geometry
+   - visible camera and blue overlay stay in that same coordinate system
 
-This build makes the camera pipeline mathematically consistent:
+2. Adds a dedicated U / R / V specialist
+   ASLingo's actual training data showed a clean landmark distinction:
+   - R: index/middle x-order crosses
+   - U: index/middle stay uncrossed and close
+   - V: index/middle stay uncrossed and wide
 
-RAW PHONE CAMERA (whatever iOS actually returns)
-  -> no stretch
-  -> no crop
-  -> centered letterbox into 960x540 / 16:9
-  -> MediaPipe HandLandmarker
-  -> unchanged SignBridge model
+   The specialist only runs after the neural model places the hand in the
+   U/R/V family. It is NOT a replacement 24-letter rules engine.
 
-The visible phone camera is also 16:9 with object-fit: contain, so it shows the
-same geometry that MediaPipe receives. The blue overlay therefore shares the
-same normalized coordinate system.
+3. Adds an A / S / T / M / N thumb specialist
+   Uses relative thumb position and depth against index/middle/ring/pinky
+   PIP landmarks. It only arbitrates inside this known confusion family.
 
-A diagnostic line is added beneath the tracker, for example:
-Camera geometry: 1280x960 (4:3) -> 960x540 (16:9) · 120px side bars · no crop
+4. Stronger learned corrections inside confusion families
+   - family search radius is broader than generic memory
+   - corrected mistakes get 1.35x training weight
+   - repeated nearby examples can now outweigh an overconfident base model
+   - one example can help but cannot receive the strongest override
 
-WHY 16:9, NOT "WHATEVER THE PHONE RETURNS"
-SignBridge's own training extractor explicitly letterboxes its training images
-to 16:9 because MediaPipe normalizes x by width and y by height, which makes
-the feature geometry aspect-ratio dependent. Matching the training geometry is
-more important than making the camera card fill the phone screen.
+5. Account memory across devices
+   Signed-in recognition feedback is read from the user's own Neon rows
+   (protected by the existing RLS), so training on an iPad can help later on
+   the user's phone. LocalStorage still gives immediate learning before the
+   server round-trip finishes.
 
-THIS BUILD DOES NOT CHANGE
-- neural network weights
-- recognition thresholds
-- A/S/T/M/N logic
-- adaptive local memory
-- community memory
-- feedback / "This is X"
-- Neon
-- J/Z
+6. Community guardrail is unchanged
+   Global/community memory still requires:
+   - at least 3 nearby examples
+   - from at least 2 distinct contributors
+   A single contributor cannot rewrite recognition for everyone.
 
-TEST ORDER
-1. First look ONLY at the overlay:
-   - wrist dot should sit on wrist
-   - MCP/palm connections should remain in the palm
-   - fingertips should land on fingertips
-2. Screenshot the diagnostic line.
-3. Then test:
-   B / L
-   A / S / T / M / N
+7. C / O / E / B gets learned-family assistance only
+   No new hand-written geometry rules were added for this lower-priority
+   family because current results are already mostly good.
+
+BEST TEST ORDER
+
+A. U / R / V
+   Try each 3-5 times. U is the most important test.
+
+B. A / S / T / M / N
+   Try the five in sequence without changing your normal signing angle.
+
+C. Controls
    K / P
    O / C
+   B / L
+   X / Y
 
-Do not add lots of corrections until the overlay itself looks trustworthy.
+Watch CURRENT ASSIST.
+It can show:
+- Base model
+- Device memory
+- Account family memory
+- U/R/V specialist
+- A/S/T/M/N specialist
+- Hybrid ... (geometry + learned memory agree)
+
+Keep correcting genuine mistakes. Do not deliberately contort a sign to make
+the app pass; those natural mistakes are the useful training data.
